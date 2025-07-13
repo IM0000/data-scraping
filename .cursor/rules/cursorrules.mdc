@@ -84,8 +84,11 @@ alwaysApply: true
 
 ### Dependencies & Environment
 
-- **Use virtual environments** (venv or conda)
-- **Pin dependency versions** in requirements.txt
+- **Use uv as the Python package manager** for dependency management and virtual environments
+- **Use `uv add` to install dependencies** instead of pip install
+- **Use `uv sync` to install dependencies** from pyproject.toml
+- **Create virtual environments with `uv venv`** for project isolation
+- **Pin dependency versions** in pyproject.toml (managed by uv)
 - **Use python-dotenv** for environment variable management
 - **Organize imports** following PEP 8 order with Korean comments
 
