@@ -1,0 +1,103 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+
+# Generate PRP (Product Requirements Prompt)
+
+## Description
+
+Generate a comprehensive PRP for feature implementation with thorough research and context gathering.
+
+## Usage
+
+This command generates a complete PRP based on INITIAL.md file.
+
+## Process
+
+### 1. Feature Analysis
+
+- Read INITIAL.md file to understand requirements
+- Analyze how provided examples can help
+- Review other considerations
+
+### 2. Research Phase
+
+#### 2.1 Codebase Analysis
+
+- Search for similar features/patterns in the codebase
+- Identify files to reference in PRP
+- Check existing conventions
+- Verify test patterns for validation approach
+
+#### 2.2 External Research
+
+- Search for similar features/patterns online
+- Library documentation (include specific URLs)
+- Implementation examples (GitHub/StackOverflow/blogs)
+- Best practices and common pitfalls
+
+#### 2.3 User Clarification (if needed)
+
+- Specific patterns to mirror and where to find them?
+- Integration requirements and where to find them?
+
+### 3. PRP Generation
+
+Use PRPs/templates/prp_base.md as template:
+
+#### 3.1 Critical Context (Important context to pass to AI agent)
+
+- **Documentation**: URLs with specific sections
+- **Code Examples**: Real snippets from codebase
+- **Gotchas**: Library quirks, version issues
+- **Patterns**: Existing approaches to follow
+
+#### 3.2 Implementation Blueprint
+
+- Start with pseudocode showing approach
+- Reference real files for patterns
+- Include error handling strategy
+- List tasks to be completed to fulfill the PRP in order
+
+#### 3.3 Validation Gates (Must be executable)
+
+```bash
+# Python example
+# Syntax/Style
+ruff check --fix && mypy .
+
+# Unit Tests
+pytest tests/ -v
+
+# Integration Tests
+pytest tests/integration/ -v
+```
+
+### 4. Quality Assurance
+
+#### 4.1 Critical Step
+
+**_ AFTER completing research and codebase exploration but BEFORE starting PRP writing _**
+**_ THINK deeply about the PRP and plan your approach, then start writing the PRP _**
+
+#### 4.2 Output Location
+
+Save to: `PRPs/{feature-name}.md`
+
+#### 4.3 Quality Checklist
+
+- [ ] All necessary context included
+- [ ] Validation gates are executable by AI
+- [ ] References existing patterns
+- [ ] Clear implementation path
+- [ ] Error handling documented
+
+#### 4.4 Confidence Score
+
+Rate the PRP on a scale of 1-10 (confidence level for one-pass implementation success using Cursor)
+
+## Goal
+
+One-pass implementation success through comprehensive context.

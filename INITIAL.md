@@ -1,15 +1,86 @@
+# Feature Request Template
+
+이 템플릿을 사용하여 새로운 기능 요청을 작성하세요. 작성 후 PRP 생성 과정을 통해 구현할 수 있습니다.
+
 ## FEATURE:
 
-[Insert your feature here]
+[구현하고자 하는 기능을 구체적으로 설명하세요]
+
+**예시:**
+
+- ❌ "웹 스크래퍼 구축"
+- ✅ "BeautifulSoup을 사용한 비동기 웹 스크래퍼 구축. 이커머스 사이트에서 제품 데이터를 추출하고, 속도 제한을 처리하며, 결과를 PostgreSQL에 저장"
+
+**포함해야 할 요소:**
+
+- 기능의 목적과 범위
+- 주요 요구사항
+- 성능 요구사항 (있다면)
+- 사용자 인터페이스 요구사항
 
 ## EXAMPLES:
 
-[Provide and explain examples that you have in the `examples/` folder]
+[`examples/` 폴더에 있는 예제들을 나열하고 어떻게 활용해야 하는지 설명하세요]
+
+**예시:**
+
+- `examples/basic_app.py` - 기본 애플리케이션 구조를 따라주세요
+- `examples/database_pattern.py` - 데이터베이스 연결 패턴을 참조하세요
+- `examples/test_pattern.py` - 테스트 작성 스타일을 따라주세요
+
+**예제가 없다면:**
+
+- "현재 examples/ 폴더가 비어있습니다. 이 기능을 구현하면서 다음 예제들을 생성해주세요:"
+- 필요한 패턴들을 나열하세요
 
 ## DOCUMENTATION:
 
-[List out any documentation (web pages, sources for an MCP server like Crawl4AI RAG, etc.) that will need to be referenced during development]
+[개발 중 참조해야 할 문서들을 나열하세요]
+
+**포함해야 할 것들:**
+
+- 라이브러리 공식 문서 URL
+- API 문서 링크
+- 관련 기술 스택 문서
+- 베스트 프랙티스 가이드
+- 참고할 만한 블로그나 튜토리얼
+
+**예시:**
+
+- https://docs.python.org/3/library/asyncio.html
+- https://beautiful-soup-4.readthedocs.io/en/latest/
+- https://docs.sqlalchemy.org/en/20/
 
 ## OTHER CONSIDERATIONS:
 
-[Any other considerations or specific requirements - great place to include gotchas that you see AI coding assistants miss with your projects a lot]
+[기타 고려사항이나 특정 요구사항들을 명시하세요]
+
+**포함하면 좋은 것들:**
+
+- AI 코딩 어시스턴트가 놓치기 쉬운 함정들
+- 프로젝트 특정 제약사항
+- 보안 고려사항
+- 성능 최적화 요구사항
+- 호환성 요구사항
+- 테스트 전략
+
+**예시:**
+
+- "Rate limiting을 반드시 구현해야 합니다 (초당 최대 10 요청)"
+- "에러 발생 시 재시도 로직이 필요합니다"
+- "로그는 structured logging 형태로 남겨야 합니다"
+
+---
+
+## 사용 방법
+
+1. 이 템플릿을 복사하여 새로운 파일을 만들거나 직접 수정하세요
+2. 각 섹션을 구체적으로 작성하세요
+3. Cursor에서 PRP 생성 과정을 통해 구현하세요
+
+## 팁
+
+- **구체적으로 작성하세요**: 모호한 설명보다는 구체적인 요구사항을 제시하세요
+- **예제를 활용하세요**: 기존 코드 패턴을 참조하면 일관성 있는 구현이 가능합니다
+- **문서를 포함하세요**: 외부 문서 링크는 구현 품질을 크게 향상시킵니다
+- **함정을 명시하세요**: 과거 경험에서 얻은 주의사항들을 포함하세요

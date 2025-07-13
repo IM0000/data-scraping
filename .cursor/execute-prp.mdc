@@ -1,0 +1,71 @@
+description:
+globs:
+alwaysApply: false
+
+---
+
+# Execute PRP (Product Requirements Prompt)
+
+## Description
+
+Execute features using PRP files.
+
+## Usage
+
+Implement complete features based on generated PRP files.
+
+## Execution Process
+
+### 1. Load PRP
+
+- Read the specified PRP file
+- Understand all context and requirements
+- Follow all PRP instructions and extend research as needed
+- Secure all necessary context to fully implement the PRP
+- Perform additional web searches and codebase exploration as needed
+
+### 2. ULTRATHINK (Deep Thinking)
+
+- Think deeply before executing the plan
+- Generate comprehensive plan addressing all requirements
+- Break down complex tasks into manageable small steps
+- Identify implementation patterns to follow from existing code
+- Determine implementation priorities
+
+### 3. Execute the Plan
+
+- Execute the PRP
+- Implement all code
+- Progress step by step and validate each step
+- Follow existing patterns and conventions
+
+### 4. Validate
+
+- Execute each validation command
+- Fix failed parts
+- Re-run until all validations pass
+- Perform code quality checks
+
+### 5. Complete
+
+- Verify all checklist items are completed
+- Run final validation suite
+- Report completion status
+- Re-read PRP to ensure everything is implemented
+
+### 6. Reference the PRP
+
+- Can always reference the PRP again when needed
+- Return to PRP if there are questions during implementation
+
+## Error Handling
+
+If validation fails, use error patterns in PRP to fix and retry.
+
+## Success Criteria
+
+- All features implemented according to PRP requirements
+- All validation gates pass
+- Code matches existing patterns
+- All tests pass
+- Documentation is complete

@@ -1,296 +1,317 @@
-# Context Engineering Template
+# Cursor 컨텍스트 엔지니어링 템플릿
 
-A comprehensive template for getting started with Context Engineering - the discipline of engineering context for AI coding assistants so they have the information necessary to get the job done end to end.
+Cursor AI 코딩 어시스턴트를 위한 컨텍스트 엔지니어링 템플릿입니다. 컨텍스트 엔지니어링은 AI 코딩 어시스턴트가 작업을 완료하는 데 필요한 정보를 체계적으로 제공하는 방법론입니다.
 
-> **Context Engineering is 10x better than prompt engineering and 100x better than vibe coding.**
+> **컨텍스트 엔지니어링은 프롬프트 엔지니어링보다 10배, 즉석 코딩보다 100배 더 효과적입니다.**
 
-## 🚀 Quick Start
+## 🚀 빠른 시작
 
 ```bash
-# 1. Clone this template
-git clone https://github.com/coleam00/Context-Engineering-Intro.git
-cd Context-Engineering-Intro
+# 1. 이 템플릿을 클론합니다
+git clone https://github.com/your-username/cursor-context-engineering-template.git
+cd cursor-context-engineering-template
 
-# 2. Set up your project rules (optional - template provided)
-# Edit CLAUDE.md to add your project-specific guidelines
+# 2. 프로젝트 규칙 설정 (선택사항 - 템플릿 제공)
+# .cursorrules 파일을 프로젝트에 맞게 편집하세요
 
-# 3. Add examples (highly recommended)
-# Place relevant code examples in the examples/ folder
+# 3. 예제 추가 (강력 권장)
+# examples/ 폴더에 관련 코드 예제를 추가하세요
 
-# 4. Create your initial feature request
-# Edit INITIAL.md with your feature requirements
+# 4. 초기 기능 요청 생성
+# INITIAL.md를 기능 요구사항으로 편집하세요
 
-# 5. Generate a comprehensive PRP (Product Requirements Prompt)
-# In Claude Code, run:
-/generate-prp INITIAL.md
+# 5. 포괄적인 PRP (Product Requirements Prompt) 생성
+# Cursor에서 .cursor/generate-prp.mdc 참조하여 PRP 생성
 
-# 6. Execute the PRP to implement your feature
-# In Claude Code, run:
-/execute-prp PRPs/your-feature-name.md
+# 6. PRP 실행하여 기능 구현
+# Cursor에서 .cursor/execute-prp.mdc 참조하여 기능 구현
 ```
 
-## 📚 Table of Contents
+## 📚 목차
 
-- [What is Context Engineering?](#what-is-context-engineering)
-- [Template Structure](#template-structure)
-- [Step-by-Step Guide](#step-by-step-guide)
-- [Writing Effective INITIAL.md Files](#writing-effective-initialmd-files)
-- [The PRP Workflow](#the-prp-workflow)
-- [Using Examples Effectively](#using-examples-effectively)
-- [Best Practices](#best-practices)
+- [컨텍스트 엔지니어링이란?](#컨텍스트-엔지니어링이란)
+- [템플릿 구조](#템플릿-구조)
+- [단계별 가이드](#단계별-가이드)
+- [효과적인 INITIAL.md 작성법](#효과적인-initialmd-작성법)
+- [PRP 워크플로우](#prp-워크플로우)
+- [예제 효과적으로 사용하기](#예제-효과적으로-사용하기)
+- [베스트 프랙티스](#베스트-프랙티스)
 
-## What is Context Engineering?
+## 컨텍스트 엔지니어링이란?
 
-Context Engineering represents a paradigm shift from traditional prompt engineering:
+컨텍스트 엔지니어링은 기존 프롬프트 엔지니어링의 패러다임 전환을 의미합니다:
 
-### Prompt Engineering vs Context Engineering
+### 프롬프트 엔지니어링 vs 컨텍스트 엔지니어링
 
-**Prompt Engineering:**
-- Focuses on clever wording and specific phrasing
-- Limited to how you phrase a task
-- Like giving someone a sticky note
+**프롬프트 엔지니어링:**
 
-**Context Engineering:**
-- A complete system for providing comprehensive context
-- Includes documentation, examples, rules, patterns, and validation
-- Like writing a full screenplay with all the details
+- 영리한 문구와 특정 표현에 집중
+- 작업을 표현하는 방식에 제한
+- 포스트잇 메모를 주는 것과 같음
 
-### Why Context Engineering Matters
+**컨텍스트 엔지니어링:**
 
-1. **Reduces AI Failures**: Most agent failures aren't model failures - they're context failures
-2. **Ensures Consistency**: AI follows your project patterns and conventions
-3. **Enables Complex Features**: AI can handle multi-step implementations with proper context
-4. **Self-Correcting**: Validation loops allow AI to fix its own mistakes
+- 포괄적인 컨텍스트 제공을 위한 완전한 시스템
+- 문서, 예제, 규칙, 패턴, 검증을 포함
+- 모든 세부사항이 포함된 완전한 시나리오 대본과 같음
 
-## Template Structure
+### 컨텍스트 엔지니어링이 중요한 이유
+
+1. **AI 실패 감소**: 대부분의 에이전트 실패는 모델 실패가 아니라 컨텍스트 실패입니다
+2. **일관성 보장**: AI가 프로젝트 패턴과 컨벤션을 따르도록 합니다
+3. **복잡한 기능 구현**: 적절한 컨텍스트로 다단계 구현을 처리할 수 있습니다
+4. **자가 수정**: 검증 루프를 통해 AI가 자체 실수를 수정할 수 있습니다
+
+## 템플릿 구조
 
 ```
-context-engineering-intro/
-├── .claude/
-│   ├── commands/
-│   │   ├── generate-prp.md    # Generates comprehensive PRPs
-│   │   └── execute-prp.md     # Executes PRPs to implement features
-│   └── settings.local.json    # Claude Code permissions
+cursor-context-engineering-template/
+├── .cursor/
+│   ├── generate-prp.mdc     # PRP 생성 가이드
+│   └── execute-prp.mdc      # PRP 실행 가이드
+├── .cursorrules             # Cursor AI 어시스턴트 규칙
 ├── PRPs/
 │   ├── templates/
-│   │   └── prp_base.md       # Base template for PRPs
-│   └── EXAMPLE_multi_agent_prp.md  # Example of a complete PRP
-├── examples/                  # Your code examples (critical!)
-├── CLAUDE.md                 # Global rules for AI assistant
-├── INITIAL.md               # Template for feature requests
-├── INITIAL_EXAMPLE.md       # Example feature request
-└── README.md                # This file
+│   │   └── prp_base.md     # PRP 기본 템플릿
+│   └── EXAMPLE_multi_agent_prp.md  # 완전한 PRP 예제
+├── examples/                # 코드 예제 (매우 중요!)
+│   ├── README.md           # 예제 가이드
+│   ├── basic_structure.py  # 기본 구조 패턴
+│   └── test_pattern.py     # 테스트 패턴
+├── INITIAL.md              # 기능 요청 템플릿
+├── INITIAL_EXAMPLE.md      # 기능 요청 예제
+└── README.md               # 이 파일
 ```
 
-This template doesn't focus on RAG and tools with context engineering because I have a LOT more in store for that soon. ;)
+## 단계별 가이드
 
-## Step-by-Step Guide
+### 1. 글로벌 규칙 설정 (.cursorrules)
 
-### 1. Set Up Global Rules (CLAUDE.md)
+`.cursorrules` 파일에는 AI 어시스턴트가 모든 대화에서 따라야 할 프로젝트 전체 규칙이 포함됩니다:
 
-The `CLAUDE.md` file contains project-wide rules that the AI assistant will follow in every conversation. The template includes:
+- **프로젝트 인식**: 계획 문서 읽기, 작업 확인
+- **코드 구조**: 파일 크기 제한, 모듈 구성
+- **테스트 요구사항**: 단위 테스트 패턴, 커버리지 기대치
+- **스타일 컨벤션**: 언어 선호도, 포맷팅 규칙
+- **문서화 표준**: docstring 형식, 주석 관행
 
-- **Project awareness**: Reading planning docs, checking tasks
-- **Code structure**: File size limits, module organization
-- **Testing requirements**: Unit test patterns, coverage expectations
-- **Style conventions**: Language preferences, formatting rules
-- **Documentation standards**: Docstring formats, commenting practices
+**제공된 템플릿을 그대로 사용하거나 프로젝트에 맞게 커스터마이징할 수 있습니다.**
 
-**You can use the provided template as-is or customize it for your project.**
+### 2. 초기 기능 요청 생성
 
-### 2. Create Your Initial Feature Request
-
-Edit `INITIAL.md` to describe what you want to build:
+`INITIAL.md`를 편집하여 구축하고자 하는 것을 설명합니다:
 
 ```markdown
 ## FEATURE:
-[Describe what you want to build - be specific about functionality and requirements]
+
+[구축하고자 하는 기능 설명 - 기능과 요구사항을 구체적으로 작성]
 
 ## EXAMPLES:
-[List any example files in the examples/ folder and explain how they should be used]
+
+[examples/ 폴더의 예제 파일들을 나열하고 어떻게 사용해야 하는지 설명]
 
 ## DOCUMENTATION:
-[Include links to relevant documentation, APIs, or MCP server resources]
+
+[관련 문서, API, 또는 리소스 링크 포함]
 
 ## OTHER CONSIDERATIONS:
-[Mention any gotchas, specific requirements, or things AI assistants commonly miss]
+
+[주의사항, 특정 요구사항, AI 어시스턴트가 놓치기 쉬운 것들 언급]
 ```
 
-**See `INITIAL_EXAMPLE.md` for a complete example.**
+**`INITIAL_EXAMPLE.md`에서 완전한 예제를 확인하세요.**
 
-### 3. Generate the PRP
+### 3. PRP 생성
 
-PRPs (Product Requirements Prompts) are comprehensive implementation blueprints that include:
+PRP(Product Requirements Prompts)는 다음을 포함하는 포괄적인 구현 청사진입니다:
 
-- Complete context and documentation
-- Implementation steps with validation
-- Error handling patterns
-- Test requirements
+- 완전한 컨텍스트와 문서
+- 검증이 포함된 구현 단계
+- 에러 처리 패턴
+- 테스트 요구사항
 
-They are similar to PRDs (Product Requirements Documents) but are crafted more specifically to instruct an AI coding assistant.
+`.cursor/generate-prp.mdc` 파일을 참조하여 PRP를 생성하세요.
 
-Run in Claude Code:
-```bash
-/generate-prp INITIAL.md
-```
+이 과정에서:
 
-**Note:** The slash commands are custom commands defined in `.claude/commands/`. You can view their implementation:
-- `.claude/commands/generate-prp.md` - See how it researches and creates PRPs
-- `.claude/commands/execute-prp.md` - See how it implements features from PRPs
+1. 기능 요청을 읽습니다
+2. 패턴을 찾기 위해 코드베이스를 연구합니다
+3. 관련 문서를 검색합니다
+4. `PRPs/your-feature-name.md`에 포괄적인 PRP를 생성합니다
 
-The `$ARGUMENTS` variable in these commands receives whatever you pass after the command name (e.g., `INITIAL.md` or `PRPs/your-feature.md`).
+### 4. PRP 실행
 
-This command will:
-1. Read your feature request
-2. Research the codebase for patterns
-3. Search for relevant documentation
-4. Create a comprehensive PRP in `PRPs/your-feature-name.md`
+생성된 PRP를 사용하여 기능을 구현합니다:
 
-### 4. Execute the PRP
+`.cursor/execute-prp.mdc` 파일을 참조하여 구현하세요.
 
-Once generated, execute the PRP to implement your feature:
+AI 코딩 어시스턴트가:
 
-```bash
-/execute-prp PRPs/your-feature-name.md
-```
+1. PRP에서 모든 컨텍스트를 읽습니다
+2. 상세한 구현 계획을 생성합니다
+3. 검증과 함께 각 단계를 실행합니다
+4. 테스트를 실행하고 문제를 수정합니다
+5. 모든 성공 기준이 충족되었는지 확인합니다
 
-The AI coding assistant will:
-1. Read all context from the PRP
-2. Create a detailed implementation plan
-3. Execute each step with validation
-4. Run tests and fix any issues
-5. Ensure all success criteria are met
+## 효과적인 INITIAL.md 작성법
 
-## Writing Effective INITIAL.md Files
+### 주요 섹션 설명
 
-### Key Sections Explained
+**FEATURE**: 구체적이고 포괄적으로 작성
 
-**FEATURE**: Be specific and comprehensive
-- ❌ "Build a web scraper"
-- ✅ "Build an async web scraper using BeautifulSoup that extracts product data from e-commerce sites, handles rate limiting, and stores results in PostgreSQL"
+- ❌ "웹 스크래퍼 구축"
+- ✅ "BeautifulSoup을 사용한 비동기 웹 스크래퍼 구축. 이커머스 사이트에서 제품 데이터를 추출하고, 속도 제한을 처리하며, 결과를 PostgreSQL에 저장"
 
-**EXAMPLES**: Leverage the examples/ folder
-- Place relevant code patterns in `examples/`
-- Reference specific files and patterns to follow
-- Explain what aspects should be mimicked
+**EXAMPLES**: examples/ 폴더 활용
 
-**DOCUMENTATION**: Include all relevant resources
-- API documentation URLs
-- Library guides
-- MCP server documentation
-- Database schemas
+- 관련 코드 패턴을 `examples/`에 배치
+- 특정 파일과 따라야 할 패턴 참조
+- 어떤 측면을 모방해야 하는지 설명
 
-**OTHER CONSIDERATIONS**: Capture important details
-- Authentication requirements
-- Rate limits or quotas
-- Common pitfalls
-- Performance requirements
+**DOCUMENTATION**: 모든 관련 리소스 포함
 
-## The PRP Workflow
+- API 문서 URL
+- 라이브러리 가이드
+- 데이터베이스 스키마
 
-### How /generate-prp Works
+**OTHER CONSIDERATIONS**: 중요한 세부사항 포함
 
-The command follows this process:
+- 인증 요구사항
+- 속도 제한 또는 할당량
+- 일반적인 함정
+- 성능 요구사항
 
-1. **Research Phase**
-   - Analyzes your codebase for patterns
-   - Searches for similar implementations
-   - Identifies conventions to follow
+## PRP 워크플로우
 
-2. **Documentation Gathering**
-   - Fetches relevant API docs
-   - Includes library documentation
-   - Adds gotchas and quirks
+### PRP 생성 과정
 
-3. **Blueprint Creation**
-   - Creates step-by-step implementation plan
-   - Includes validation gates
-   - Adds test requirements
+1. **연구 단계**
 
-4. **Quality Check**
-   - Scores confidence level (1-10)
-   - Ensures all context is included
+   - 패턴을 위해 코드베이스 분석
+   - 유사한 구현 검색
+   - 따라야 할 컨벤션 식별
 
-### How /execute-prp Works
+2. **문서 수집**
 
-1. **Load Context**: Reads the entire PRP
-2. **Plan**: Creates detailed task list using TodoWrite
-3. **Execute**: Implements each component
-4. **Validate**: Runs tests and linting
-5. **Iterate**: Fixes any issues found
-6. **Complete**: Ensures all requirements met
+   - 관련 API 문서 가져오기
+   - 라이브러리 문서 포함
+   - 주의사항과 특이사항 추가
 
-See `PRPs/EXAMPLE_multi_agent_prp.md` for a complete example of what gets generated.
+3. **청사진 생성**
 
-## Using Examples Effectively
+   - 단계별 구현 계획 생성
+   - 검증 게이트 포함
+   - 테스트 요구사항 추가
 
-The `examples/` folder is **critical** for success. AI coding assistants perform much better when they can see patterns to follow.
+4. **품질 검사**
+   - 신뢰도 레벨 평가 (1-10)
+   - 모든 컨텍스트 포함 확인
 
-### What to Include in Examples
+### PRP 실행 과정
 
-1. **Code Structure Patterns**
-   - How you organize modules
-   - Import conventions
-   - Class/function patterns
+1. **컨텍스트 로드**: 전체 PRP 읽기
+2. **계획**: 상세한 작업 목록 생성
+3. **실행**: 각 구성요소 구현
+4. **검증**: 테스트 및 린팅 실행
+5. **반복**: 발견된 문제 수정
+6. **완료**: 모든 요구사항 충족 확인
 
-2. **Testing Patterns**
-   - Test file structure
-   - Mocking approaches
-   - Assertion styles
+## 예제 효과적으로 사용하기
 
-3. **Integration Patterns**
-   - API client implementations
-   - Database connections
-   - Authentication flows
+`examples/` 폴더는 **성공에 매우 중요**합니다. AI 코딩 어시스턴트는 따라할 패턴을 볼 수 있을 때 훨씬 더 잘 작동합니다.
 
-4. **CLI Patterns**
-   - Argument parsing
-   - Output formatting
-   - Error handling
+### 예제에 포함해야 할 것들
 
-### Example Structure
+1. **코드 구조 패턴**
+
+   - 모듈 구성 방식
+   - import 컨벤션
+   - 클래스/함수 패턴
+
+2. **테스트 패턴**
+
+   - 테스트 파일 구조
+   - 모킹 접근법
+   - 어설션 스타일
+
+3. **통합 패턴**
+
+   - API 클라이언트 구현
+   - 데이터베이스 연결
+   - 인증 플로우
+
+4. **CLI 패턴**
+   - 인수 파싱
+   - 출력 포맷팅
+   - 에러 처리
+
+### 예제 구조
 
 ```
 examples/
-├── README.md           # Explains what each example demonstrates
-├── cli.py             # CLI implementation pattern
-├── agent/             # Agent architecture patterns
-│   ├── agent.py      # Agent creation pattern
-│   ├── tools.py      # Tool implementation pattern
-│   └── providers.py  # Multi-provider pattern
-└── tests/            # Testing patterns
-    ├── test_agent.py # Unit test patterns
-    └── conftest.py   # Pytest configuration
+├── README.md              # 각 예제가 무엇을 보여주는지 설명
+├── basic_structure.py     # 기본 구조 패턴
+├── test_pattern.py        # 테스트 패턴
+└── ...                    # 추가 패턴들
 ```
 
-## Best Practices
+## 베스트 프랙티스
 
-### 1. Be Explicit in INITIAL.md
-- Don't assume the AI knows your preferences
-- Include specific requirements and constraints
-- Reference examples liberally
+### 1. INITIAL.md에서 명시적으로 작성
 
-### 2. Provide Comprehensive Examples
-- More examples = better implementations
-- Show both what to do AND what not to do
-- Include error handling patterns
+- AI가 선호도를 안다고 가정하지 마세요
+- 구체적인 요구사항과 제약사항 포함
+- 예제를 자유롭게 참조하세요
 
-### 3. Use Validation Gates
-- PRPs include test commands that must pass
-- AI will iterate until all validations succeed
-- This ensures working code on first try
+### 2. 포괄적인 예제 제공
 
-### 4. Leverage Documentation
-- Include official API docs
-- Add MCP server resources
-- Reference specific documentation sections
+- 더 많은 예제 = 더 나은 구현
+- 해야 할 것과 하지 말아야 할 것 모두 보여주세요
+- 에러 처리 패턴 포함
 
-### 5. Customize CLAUDE.md
-- Add your conventions
-- Include project-specific rules
-- Define coding standards
+### 3. 검증 게이트 사용
 
-## Resources
+- PRP에는 통과해야 하는 테스트 명령이 포함됩니다
+- AI는 모든 검증이 성공할 때까지 반복합니다
+- 이는 첫 번째 시도에서 작동하는 코드를 보장합니다
 
-- [Claude Code Documentation](https://docs.anthropic.com/en/docs/claude-code)
-- [Context Engineering Best Practices](https://www.philschmid.de/context-engineering)
+### 4. 문서 활용
+
+- 공식 API 문서 포함
+- 특정 문서 섹션 참조
+
+### 5. .cursorrules 커스터마이징
+
+- 컨벤션 추가
+- 프로젝트별 규칙 포함
+- 코딩 표준 정의
+
+## 코드 예제가 없을 때
+
+예제가 없다면:
+
+1. **최소한의 예제부터 시작**하세요
+2. **점진적으로 구축**하세요 - 첫 번째 기능을 예제로 사용
+3. **외부 소스 활용**하세요 - 공식 문서, 오픈소스 프로젝트
+4. **.cursorrules에서 더 구체적인 규칙** 제공
+5. **반복적으로 개선**하세요
+
+## 리소스
+
+- [Cursor 공식 문서](https://docs.cursor.com/)
+- [컨텍스트 엔지니어링 베스트 프랙티스](https://www.cursor.com/blog/context-engineering)
+
+---
+
+## 기여하기
+
+이 템플릿을 개선하고 싶으시다면:
+
+1. 이슈를 생성하거나 풀 리퀘스트를 제출하세요
+2. 새로운 예제 패턴을 추가하세요
+3. 문서를 개선하세요
+4. 베스트 프랙티스를 공유하세요
+
+## 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 제공됩니다.

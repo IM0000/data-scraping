@@ -1,0 +1,157 @@
+# Cursor Rules for Context Engineering Template
+
+## 🎯 Context Engineering Philosophy
+
+- **Context Engineering > Prompt Engineering**: Provide comprehensive context, not just clever prompts
+- **Systematic Approach**: Follow the proven workflow: INITIAL.md → PRP Generation → PRP Execution
+- **Validation-Driven**: Every implementation must pass defined validation gates
+- **Pattern-Based**: Leverage examples/ folder for consistent patterns and conventions
+
+## 🔄 Core Workflow
+
+- **ALWAYS start by reading `INITIAL.md`** to understand feature requirements, constraints, and context
+- **Check `examples/` folder** for existing code patterns and conventions before implementing
+- **Follow the Context Engineering workflow**:
+  1. **Simple features**: Direct implementation following examples/ patterns
+  2. **Complex features**: Use `.cursor/generate-prp.mdc` → Create PRP → Use `.cursor/execute-prp.mdc`
+
+## 🚀 Feature Implementation Process
+
+### For Simple Features:
+
+1. Read `INITIAL.md` thoroughly
+2. Check `examples/` for relevant patterns
+3. Implement following established patterns
+4. Add tests and validation
+5. Update `examples/` if new patterns are created
+
+### For Complex Features (Multi-step, Integration, New Architecture):
+
+1. Read `INITIAL.md` thoroughly
+2. Use `.cursor/generate-prp.mdc` command to create comprehensive PRP
+3. Research codebase for patterns and conventions
+4. Generate detailed PRP in `PRPs/` folder
+5. Use `.cursor/execute-prp.mdc` command for implementation
+6. Follow all validation gates defined in PRP
+7. Update `examples/` with new patterns
+
+## 🐍 Python Code Quality Standards
+
+### Code Structure & Style
+
+- **Follow PEP 8** for code formatting and style
+- **Use type hints** for all function parameters and return values
+- **Write docstrings in Korean** for all functions, classes, and modules:
+  ```python
+  def scrape_product_data(url: str, timeout: int = 30) -> Dict[str, Any]:
+      """
+      주어진 URL에서 상품 데이터를 스크래핑합니다.
+
+      Args:
+          url: 스크래핑할 상품 페이지 URL
+          timeout: 요청 타임아웃 (초)
+
+      Returns:
+          상품 정보가 담긴 딕셔너리
+
+      Raises:
+          RequestException: 요청이 실패한 경우
+          ParsingError: HTML 파싱이 불가능한 경우
+      """
+  ```
+
+### Language Guidelines
+
+- **Write all code comments in Korean** for better understanding
+- **Use Korean for docstrings** and function/class documentation
+- **Use Korean for log messages** and error messages
+- **Use Korean for test descriptions** and assertions
+- **Function and class names remain in English** for Python conventions
+
+### Data Scraping Best Practices
+
+- **Respect robots.txt** and website terms of service
+- **Implement rate limiting** to avoid overwhelming target servers
+- **Use proper headers** to mimic real browser requests
+- **Handle network errors gracefully** with exponential backoff
+- **Validate scraped data** before storage
+- **Use structured logging in Korean** for debugging
+
+### Dependencies & Environment
+
+- **Use virtual environments** (venv or conda)
+- **Pin dependency versions** in requirements.txt
+- **Use python-dotenv** for environment variable management
+- **Organize imports** following PEP 8 order with Korean comments
+
+### Testing & Reliability
+
+- **Write comprehensive tests** using pytest
+- **Mock external HTTP requests** in tests
+- **Test edge cases** and error scenarios
+- **Use fixtures** for test data
+- **Write test descriptions in Korean**
+
+## 🧱 Code Structure & Quality
+
+- **Maintain consistency** with patterns shown in `examples/` folder
+- **Never create files longer than 500 lines** - split into modules if needed
+- **Organize code into logical modules** based on functionality
+- **Follow existing project structure** if one is established
+- **Use clear, descriptive module names**
+
+## 📚 Context Engineering Rules
+
+### Information Gathering
+
+- **Never assume missing context** - ask questions if INITIAL.md is unclear
+- **Always validate against INITIAL.md requirements** before implementation
+- **Reference all documentation links** provided in INITIAL.md
+- **Consider "OTHER CONSIDERATIONS" section** for edge cases and constraints
+- **Study examples/ folder thoroughly** before starting implementation
+
+### Pattern Management
+
+- **Update examples/ folder** when creating new reusable patterns
+- **Document new patterns** in examples/README.md
+- **Maintain consistency** with existing patterns
+- **Prefer extending existing patterns** over creating new ones
+
+### PRP Management
+
+- **Generate PRPs for complex features** using the template in PRPs/templates/
+- **Include comprehensive validation gates** in all PRPs
+- **Reference specific examples** and documentation in PRPs
+- **Ensure PRPs are self-contained** with all necessary context
+
+## 🧠 AI Behavior Guidelines
+
+- **Never hallucinate libraries or functions** - only use verified packages
+- **Always confirm file paths exist** before referencing them
+- **Ask for clarification** if INITIAL.md requirements are ambiguous
+- **Prioritize comprehensive context** over quick solutions
+- **Follow validation-driven development** - test early and often
+- **Use established Python libraries** for scraping (requests, aiohttp, BeautifulSoup, Scrapy)
+
+## ✅ Completion Criteria
+
+- **All requirements from INITIAL.md are met**
+- **Code follows patterns from examples/ folder**
+- **Tests are written and passing**
+- **Validation gates (if PRP) are all successful**
+- **Documentation is updated if needed**
+- **New patterns are added to examples/ if created**
+- **All comments and docstrings are in Korean**
+- **Code follows Python best practices and PEP 8**
+
+## 🚫 What NOT to Do
+
+- Don't skip reading INITIAL.md at the start of conversations
+- Don't ignore the PRP workflow for complex features
+- Don't create implementations without checking examples/ first
+- Don't skip validation steps outlined in PRPs
+- Don't ignore constraints mentioned in "OTHER CONSIDERATIONS"
+- Don't hardcode values - use environment variables
+- Don't write comments or docstrings in English
+- Don't impose rigid structures - adapt to requirements
+- Don't assume context - always ask for clarification when unclear
