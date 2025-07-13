@@ -1,86 +1,237 @@
-# Feature Request Template
-
-이 템플릿을 사용하여 새로운 기능 요청을 작성하세요. 작성 후 PRP 생성 과정을 통해 구현할 수 있습니다.
+# Feature Request: Gateway-Worker Scraping System
 
 ## FEATURE:
 
-[구현하고자 하는 기능을 구체적으로 설명하세요]
+Build a distributed web scraping system using Python with gateway-worker architecture. The system should handle scraping requests through a message queue, execute dynamic scripts, and return results synchronously to clients.
 
-**예시:**
+**Core Components:**
 
-- ❌ "웹 스크래퍼 구축"
-- ✅ "BeautifulSoup을 사용한 비동기 웹 스크래퍼 구축. 이커머스 사이트에서 제품 데이터를 추출하고, 속도 제한을 처리하며, 결과를 PostgreSQL에 저장"
+- **Gateway**: Receives scraping requests via HTTP API and forwards them to message queue
+- **Message Queue**: Manages scraping tasks between gateway and workers
+- **Worker**: Processes tasks from queue, downloads and executes scraping scripts in child processes
+- **Script Storage**: External repository for site-specific and task-specific scraping scripts
+- **Caching System**: Version-controlled caching of scraping scripts
 
-**포함해야 할 요소:**
+**Key Requirements:**
 
-- 기능의 목적과 범위
-- 주요 요구사항
-- 성능 요구사항 (있다면)
-- 사용자 인터페이스 요구사항
+- Gateway-worker architecture with message queue communication
+- Dynamic script execution with child process isolation
+- Synchronous response delivery with timeout handling
+- Version-controlled script caching and automatic updates
+- Flexible input parameter system for script execution
+- Support for HTTP scraping, captcha handling (pydoll), and browser automation
+- Site-specific and task-specific script management
+
+**Technical Specifications:**
+
+- Language: Python
+- Architecture: Distributed gateway-worker pattern
+- Script Storage: External repository with version control (supports Git, HTTP, S3, etc.)
+- Execution: Child process isolation for security
+- Caching: Version comparison and conditional downloads
+- Protocols: HTTP for scraping, browser automation when needed
 
 ## EXAMPLES:
 
-[`examples/` 폴더에 있는 예제들을 나열하고 어떻게 활용해야 하는지 설명하세요]
+Currently the examples/ folder is empty. Please create the following examples during implementation:
 
-**예시:**
-
-- `examples/basic_app.py` - 기본 애플리케이션 구조를 따라주세요
-- `examples/database_pattern.py` - 데이터베이스 연결 패턴을 참조하세요
-- `examples/test_pattern.py` - 테스트 작성 스타일을 따라주세요
-
-**예제가 없다면:**
-
-- "현재 examples/ 폴더가 비어있습니다. 이 기능을 구현하면서 다음 예제들을 생성해주세요:"
-- 필요한 패턴들을 나열하세요
+- `gateway/` - API gateway patterns and request handling
+- `worker/` - Worker process patterns and task execution
+- `queue/` - Message queue integration patterns
+- `script_manager/` - Script downloading, caching, and version management
+- `scrapers/` - Sample scraping script templates
+- `models/` - Data models for requests, responses, and configurations
+- `tests/` - Testing patterns for distributed systems
 
 ## DOCUMENTATION:
 
-[개발 중 참조해야 할 문서들을 나열하세요]
+**Message Queue Systems:**
 
-**포함해야 할 것들:**
+- https://docs.celeryq.dev/en/stable/ (Celery)
+- https://python-rq.org/ (RQ)
+- https://docs.aioredis.io/en/stable/ (Redis)
 
-- 라이브러리 공식 문서 URL
-- API 문서 링크
-- 관련 기술 스택 문서
-- 베스트 프랙티스 가이드
-- 참고할 만한 블로그나 튜토리얼
+**Web Scraping Libraries:**
 
-**예시:**
-
-- https://docs.python.org/3/library/asyncio.html
+- https://requests.readthedocs.io/en/latest/
+- https://docs.aiohttp.org/en/stable/
 - https://beautiful-soup-4.readthedocs.io/en/latest/
-- https://docs.sqlalchemy.org/en/20/
+- https://scrapy.readthedocs.io/en/latest/
+
+**Browser Automation:**
+
+- https://playwright.dev/python/
+- https://selenium-python.readthedocs.io/
+- https://pypi.org/project/pydoll/ (for captcha handling)
+
+**Process Management:**
+
+- https://docs.python.org/3/library/subprocess.html
+- https://docs.python.org/3/library/multiprocessing.html
+
+**API Framework:**
+
+- https://fastapi.tiangolo.com/
+- https://flask.palletsprojects.com/
 
 ## OTHER CONSIDERATIONS:
 
-[기타 고려사항이나 특정 요구사항들을 명시하세요]
+**Architecture Recommendations:**
 
-**포함하면 좋은 것들:**
+- Use Redis as message broker for high performance
+- Implement FastAPI for gateway REST API
+- Use Celery or RQ for worker task management
+- Consider Docker containers for worker isolation
+- Implement health checks for worker monitoring
 
-- AI 코딩 어시스턴트가 놓치기 쉬운 함정들
-- 프로젝트 특정 제약사항
-- 보안 고려사항
-- 성능 최적화 요구사항
-- 호환성 요구사항
-- 테스트 전략
+**Security & Isolation:**
 
-**예시:**
+- Run scraping scripts in sandboxed child processes
+- Implement script validation before execution
+- Use resource limits (CPU, memory, timeout) for script execution
+- Validate and sanitize input parameters
 
-- "Rate limiting을 반드시 구현해야 합니다 (초당 최대 10 요청)"
-- "에러 발생 시 재시도 로직이 필요합니다"
-- "로그는 structured logging 형태로 남겨야 합니다"
+**Scalability & Performance:**
 
----
+- Design for horizontal worker scaling
+- Implement connection pooling for HTTP requests
+- Use async/await patterns where possible
+- Consider worker specialization by site or task type
 
-## 사용 방법
+**Error Handling & Monitoring:**
 
-1. 이 템플릿을 복사하여 새로운 파일을 만들거나 직접 수정하세요
-2. 각 섹션을 구체적으로 작성하세요
-3. Cursor에서 PRP 생성 과정을 통해 구현하세요
+- Implement comprehensive logging in Korean
+- Add retry mechanisms with exponential backoff
+- Monitor worker health and queue status
+- Handle script download failures gracefully
 
-## 팁
+**Script Management:**
 
-- **구체적으로 작성하세요**: 모호한 설명보다는 구체적인 요구사항을 제시하세요
-- **예제를 활용하세요**: 기존 코드 패턴을 참조하면 일관성 있는 구현이 가능합니다
-- **문서를 포함하세요**: 외부 문서 링크는 구현 품질을 크게 향상시킵니다
-- **함정을 명시하세요**: 과거 경험에서 얻은 주의사항들을 포함하세요
+- Use semantic versioning for scripts
+- Implement script metadata (dependencies, requirements)
+- Support for script-specific configuration
+- Consider script hot-reloading capabilities
+- Script storage supports Git, HTTP, and S3-compatible object storage
+- S3 is recommended for large-scale or cloud-native deployments
+
+**Data Flow:**
+
+1. Client → Gateway (HTTP request with script info + parameters)
+2. Gateway → Message Queue (task creation)
+3. Worker → Script Storage (version check + download if needed)
+4. Worker → Child Process (script execution with parameters)
+5. Worker → Gateway (synchronous result delivery)
+6. Gateway → Client (HTTP response with timeout handling)
+
+**Additional Components to Consider:**
+
+- **Database**: For task history, worker status, and script metadata
+- **Load Balancer**: For multiple gateway instances
+- **Monitoring Dashboard**: For system health and performance metrics
+- **Rate Limiting**: Per-site and per-client request limits
+- **Result Storage**: For large scraping results (optional async delivery)
+- **Authentication**: API key or token-based access control
+
+**Environment Configuration Examples:**
+
+Git Repository:
+
+```
+SCRIPT_REPOSITORY_TYPE=git
+SCRIPT_REPOSITORY_URL=https://github.com/your-org/scraping-scripts
+```
+
+HTTP Repository:
+
+```
+SCRIPT_REPOSITORY_TYPE=http
+SCRIPT_REPOSITORY_URL=https://api.example.com/scripts
+```
+
+S3 Repository:
+
+```
+SCRIPT_REPOSITORY_TYPE=s3
+S3_BUCKET_NAME=your-scraping-scripts-bucket
+S3_REGION=ap-northeast-2
+S3_ACCESS_KEY=your-access-key
+S3_SECRET_KEY=your-secret-key
+S3_PREFIX=scripts/  # Optional prefix for organization
+```
+
+## PRP Generation Plan
+
+**System Complexity Analysis:**
+This Gateway-Worker Scraping System consists of 5 major components forming a distributed system that is too complex to manage with a single PRP. Each component should be developed and tested independently, requiring a phased approach to PRP generation.
+
+**PRP Generation Order (Dependency Consideration):**
+
+### Phase 1: Foundation Infrastructure
+
+**PRP-1: Core Models & Shared Components**
+
+- Data model definitions (Request, Response, Task, Script, etc.)
+- Common utilities and configuration management
+- Basic exception handling and logging system
+- Dependencies: None (implement first)
+
+### Phase 2: Message Queue System
+
+**PRP-2: Message Queue System**
+
+- Redis-based message broker implementation
+- Task queue management (creation, retrieval, status updates)
+- Worker health checks and monitoring
+- Dependencies: PRP-1 (uses common models)
+
+### Phase 3: Script Management System
+
+**PRP-3: Script Manager**
+
+- Script downloads from external repositories
+- Version control and caching system
+- Script metadata management
+- Dependencies: PRP-1 (uses common models)
+
+### Phase 4: Worker System
+
+**PRP-4: Worker System**
+
+- Task retrieval from queue
+- Script execution in child processes
+- Result processing and error handling
+- Dependencies: PRP-1, PRP-2, PRP-3 (uses all previous components)
+
+### Phase 5: Gateway API
+
+**PRP-5: Gateway API**
+
+- FastAPI-based REST API implementation
+- Request validation and queue forwarding
+- Synchronous response handling (with timeout)
+- Dependencies: PRP-1, PRP-2 (uses models and queue system)
+
+### Phase 6: System Integration & Optimization
+
+**PRP-6: Integration & Optimization**
+
+- Full system integration testing
+- Performance optimization and monitoring
+- Error handling and recovery mechanisms
+- Dependencies: PRP-1~5 (integrates all components)
+
+**Each PRP Components:**
+
+- **Critical Context**: Relevant documentation and examples for each component
+- **Implementation Blueprint**: Detailed implementation plans and pseudocode
+- **Validation Gates**: Component-specific testing strategies
+- **Dependencies**: Previous PRP completion verification requirements
+
+**Recommended Development Approach:**
+
+1. Progress through each Phase sequentially
+2. Verify validation gates pass after each PRP completion
+3. Ensure previous component stability before proceeding to next Phase
+4. Perform basic end-to-end testing after Phase 4 completion
+
+This phased approach enables systematic construction of complex distributed systems.

@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # Cursor Rules for Context Engineering Template
 
 ## 🎯 Context Engineering Philosophy
@@ -42,6 +46,7 @@
 - **Follow PEP 8** for code formatting and style
 - **Use type hints** for all function parameters and return values
 - **Write docstrings in Korean** for all functions, classes, and modules:
+
   ```python
   def scrape_product_data(url: str, timeout: int = 30) -> Dict[str, Any]:
       """
