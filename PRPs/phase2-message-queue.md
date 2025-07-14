@@ -80,124 +80,278 @@ src/
 ├── exceptions.py            # Exception classes (from Phase 1)
 └── queue/                   # NEW: Message queue system
     ├── __init__.py
-    ├── redis_queue.py       # Redis queue implementation
+    ├── rabbitmq_rpc.py      # RabbitMQ RPC implementation
     ├── task_manager.py      # Task lifecycle management
     └── worker_monitor.py    # Worker health monitoring
 ```
 
 ### Key Requirements from INITIAL.md
 
-- Redis as message broker for high performance
-- Synchronous response delivery with timeout handling
+- RabbitMQ as message broker for robust RPC-style communication
+- Synchronous response delivery with timeout handling using correlation_id pattern
 - Comprehensive logging in Korean
 - Retry mechanisms with exponential backoff
 - Worker health and queue status monitoring
 
 ## Implementation Blueprint
 
-### Task 1: Redis Queue Implementation
+### Task 1: RabbitMQ RPC Implementation
 
 ```python
-# queue/redis_queue.py
+# queue/rabbitmq_rpc.py
 import asyncio
 import json
-import redis.asyncio as redis
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+import uuid
+from typing import Optional, Dict, Any, Callable
+from datetime import datetime
+import aio_pika
+from aio_pika import Message, DeliveryMode, connect_robust
+from aio_pika.abc import AbstractIncomingMessage, AbstractConnection, AbstractChannel, AbstractQueue
 from src.models.base import ScrapingRequest, ScrapingResponse, TaskStatus
 from src.config.settings import Settings
 from src.utils.logging import setup_logging
 from src.exceptions import QueueConnectionException
 
-class RedisQueue:
-    """Redis 기반 작업 큐 클래스"""
+class RabbitMQRPC:
+    """RabbitMQ 기반 RPC 통신 클래스"""
 
     def __init__(self, settings: Settings):
         """
-        Redis 큐 초기화
+        RabbitMQ RPC 초기화
 
         Args:
             settings: 시스템 설정 객체
         """
         self.settings = settings
-        self.redis_client: Optional[redis.Redis] = None
+        self.connection: Optional[AbstractConnection] = None
+        self.channel: Optional[AbstractChannel] = None
+        self.callback_queue: Optional[AbstractQueue] = None
+        self.futures: Dict[str, asyncio.Future] = {}
         self.logger = setup_logging(settings)
 
         # 큐 이름 정의
-        self.task_queue = "scraping:tasks:pending"
-        self.processing_queue = "scraping:tasks:processing"
-        self.completed_queue = "scraping:tasks:completed"
-        self.failed_queue = "scraping:tasks:failed"
+        self.task_queue_name = settings.rabbitmq_task_queue
+        self.reply_queue_name = None  # 동적 생성
 
     async def connect(self) -> None:
-        """Redis 연결 초기화"""
+        """RabbitMQ 연결 초기화"""
         try:
-            self.redis_client = redis.Redis(
-                host=self.settings.redis_host,
-                port=self.settings.redis_port,
-                db=self.settings.redis_db,
-                decode_responses=True
+            self.connection = await connect_robust(
+                self.settings.rabbitmq_url,
+                client_properties={"connection_name": "gateway-rpc-client"}
             )
-            # 연결 테스트
-            await self.redis_client.ping()
-            self.logger.info(f"Redis 연결 성공: {self.settings.redis_host}:{self.settings.redis_port}")
+            self.channel = await self.connection.channel()
+            await self.channel.set_qos(prefetch_count=1)
+
+            # 작업 큐 선언 (워커가 소비할 큐)
+            await self.channel.declare_queue(
+                self.task_queue_name,
+                durable=True
+            )
+
+            self.logger.info(f"RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
         except Exception as e:
-            self.logger.error(f"Redis 연결 실패: {e}")
-            raise QueueConnectionException(f"Redis 연결 실패: {e}")
+            self.logger.error(f"RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"RabbitMQ 연결 실패: {e}")
 
-    async def enqueue_task(self, request: ScrapingRequest) -> None:
-        """작업을 큐에 추가"""
-        if not self.redis_client:
-            raise QueueConnectionException("Redis 클라이언트가 초기화되지 않았습니다")
+    async def setup_callback_queue(self) -> None:
+        """응답 수신용 콜백 큐 설정"""
+        if not self.channel:
+            raise QueueConnectionException("RabbitMQ 채널이 초기화되지 않았습니다")
 
-        task_data = {
+        # 익스클루시브 큐 생성 (클라이언트별 고유)
+        self.callback_queue = await self.channel.declare_queue(
+            exclusive=True,
+            auto_delete=True
+        )
+        self.reply_queue_name = self.callback_queue.name
+
+        # 콜백 메시지 소비 시작
+        await self.callback_queue.consume(
+            self._on_response,
+            no_ack=True
+        )
+
+        self.logger.info(f"콜백 큐 설정 완료: {self.reply_queue_name}")
+
+    async def _on_response(self, message: AbstractIncomingMessage) -> None:
+        """응답 메시지 처리"""
+        correlation_id = message.correlation_id
+
+        if correlation_id in self.futures:
+            future = self.futures.pop(correlation_id)
+            if not future.done():
+                try:
+                    response_data = json.loads(message.body.decode())
+                    response = ScrapingResponse(**response_data)
+                    future.set_result(response)
+                    self.logger.info(f"응답 수신 완료: {correlation_id}")
+                except Exception as e:
+                    future.set_exception(e)
+                    self.logger.error(f"응답 처리 오류: {correlation_id}, {e}")
+
+    async def call_async(self, request: ScrapingRequest, timeout: int = 300) -> ScrapingResponse:
+        """비동기 RPC 호출"""
+        if not self.channel or not self.callback_queue:
+            raise QueueConnectionException("RabbitMQ가 초기화되지 않았습니다")
+
+        correlation_id = str(uuid.uuid4())
+        future = asyncio.Future()
+        self.futures[correlation_id] = future
+
+        # 요청 메시지 생성
+        request_data = {
             "request_id": request.request_id,
             "script_name": request.script_name,
             "script_version": request.script_version,
             "parameters": request.parameters,
             "timeout": request.timeout,
-            "created_at": request.created_at.isoformat(),
-            "status": TaskStatus.PENDING.value
+            "created_at": request.created_at.isoformat()
         }
 
-        await self.redis_client.lpush(self.task_queue, json.dumps(task_data))
-        self.logger.info(f"작업 큐 추가: {request.request_id}")
+        message = Message(
+            json.dumps(request_data).encode(),
+            correlation_id=correlation_id,
+            reply_to=self.reply_queue_name,
+            delivery_mode=DeliveryMode.PERSISTENT
+        )
 
-    async def dequeue_task(self, worker_id: str) -> Optional[ScrapingRequest]:
-        """큐에서 작업 가져오기 (블로킹)"""
-        if not self.redis_client:
-            raise QueueConnectionException("Redis 클라이언트가 초기화되지 않았습니다")
+        # 메시지 발송
+        await self.channel.default_exchange.publish(
+            message,
+            routing_key=self.task_queue_name
+        )
 
-        # 블로킹 pop으로 작업 가져오기
-        result = await self.redis_client.brpop(self.task_queue, timeout=10)
+        self.logger.info(f"RPC 요청 발송: {correlation_id} -> {request.script_name}")
 
-        if result:
-            queue_name, task_json = result
-            task_data = json.loads(task_json)
+        try:
+            # 응답 대기 (타임아웃 포함)
+            response = await asyncio.wait_for(future, timeout=timeout)
+            return response
+        except asyncio.TimeoutError:
+            # 타임아웃 시 future 정리
+            self.futures.pop(correlation_id, None)
+            self.logger.error(f"RPC 요청 타임아웃: {correlation_id}")
+            raise TimeoutError(f"RPC 요청 타임아웃: {correlation_id}")
+        except Exception as e:
+            self.futures.pop(correlation_id, None)
+            self.logger.error(f"RPC 요청 오류: {correlation_id}, {e}")
+            raise
 
-            # 처리 중 큐로 이동
-            task_data["status"] = TaskStatus.RUNNING.value
-            task_data["worker_id"] = worker_id
-            task_data["started_at"] = datetime.now().isoformat()
+    async def disconnect(self) -> None:
+        """연결 해제"""
+        if self.connection and not self.connection.is_closed:
+            await self.connection.close()
+            self.logger.info("RabbitMQ 연결 해제 완료")
 
-            await self.redis_client.hset(
-                self.processing_queue,
-                task_data["request_id"],
-                json.dumps(task_data)
+
+class RabbitMQWorker:
+    """워커용 RabbitMQ 클라이언트"""
+
+    def __init__(self, settings: Settings, task_handler: Callable):
+        """
+        RabbitMQ 워커 초기화
+
+        Args:
+            settings: 시스템 설정 객체
+            task_handler: 작업 처리 함수
+        """
+        self.settings = settings
+        self.task_handler = task_handler
+        self.connection: Optional[AbstractConnection] = None
+        self.channel: Optional[AbstractChannel] = None
+        self.logger = setup_logging(settings)
+
+    async def connect(self) -> None:
+        """RabbitMQ 연결 초기화"""
+        try:
+            self.connection = await connect_robust(
+                self.settings.rabbitmq_url,
+                client_properties={"connection_name": "worker-client"}
             )
+            self.channel = await self.connection.channel()
+            await self.channel.set_qos(prefetch_count=1)
 
-            self.logger.info(f"작업 할당: {task_data['request_id']} -> {worker_id}")
+            self.logger.info(f"워커 RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
+        except Exception as e:
+            self.logger.error(f"워커 RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"워커 RabbitMQ 연결 실패: {e}")
 
-            return ScrapingRequest(
-                script_name=task_data["script_name"],
-                script_version=task_data["script_version"],
-                parameters=task_data["parameters"],
-                timeout=task_data["timeout"],
-                request_id=task_data["request_id"],
-                created_at=datetime.fromisoformat(task_data["created_at"])
-            )
+    async def start_consuming(self) -> None:
+        """작업 큐 소비 시작"""
+        if not self.channel:
+            raise QueueConnectionException("RabbitMQ 채널이 초기화되지 않았습니다")
 
-        return None
+        # 작업 큐 선언
+        queue = await self.channel.declare_queue(
+            self.settings.rabbitmq_task_queue,
+            durable=True
+        )
+
+        # 메시지 소비 시작
+        await queue.consume(self._process_message)
+        self.logger.info(f"작업 큐 소비 시작: {self.settings.rabbitmq_task_queue}")
+
+    async def _process_message(self, message: AbstractIncomingMessage) -> None:
+        """작업 메시지 처리"""
+        async with message.process():
+            try:
+                # 요청 데이터 파싱
+                request_data = json.loads(message.body.decode())
+                request = ScrapingRequest(**request_data)
+
+                self.logger.info(f"작업 처리 시작: {request.request_id}")
+
+                # 작업 처리
+                response = await self.task_handler(request)
+
+                # 응답 발송
+                if message.reply_to and message.correlation_id:
+                    await self._send_response(response, message.reply_to, message.correlation_id)
+
+                self.logger.info(f"작업 처리 완료: {request.request_id}")
+
+            except Exception as e:
+                self.logger.error(f"작업 처리 오류: {e}")
+
+                # 오류 응답 발송
+                if message.reply_to and message.correlation_id:
+                    error_response = ScrapingResponse(
+                        request_id=request_data.get("request_id", "unknown"),
+                        status=TaskStatus.FAILED,
+                        error=str(e)
+                    )
+                    await self._send_response(error_response, message.reply_to, message.correlation_id)
+
+    async def _send_response(self, response: ScrapingResponse, reply_to: str, correlation_id: str) -> None:
+        """응답 메시지 발송"""
+        if not self.channel:
+            return
+
+        response_data = {
+            "request_id": response.request_id,
+            "status": response.status.value,
+            "data": response.data,
+            "error": response.error,
+            "execution_time": response.execution_time,
+            "completed_at": response.completed_at.isoformat() if response.completed_at else None
+        }
+
+        message = Message(
+            json.dumps(response_data).encode(),
+            correlation_id=correlation_id
+        )
+
+        await self.channel.default_exchange.publish(
+            message,
+            routing_key=reply_to
+        )
+
+    async def disconnect(self) -> None:
+        """연결 해제"""
+        if self.connection and not self.connection.is_closed:
+            await self.connection.close()
+            self.logger.info("워커 RabbitMQ 연결 해제 완료")
 ```
 
 ### Task 2: Task Manager
@@ -208,36 +362,64 @@ import asyncio
 import json
 from typing import Dict, Optional, List
 from datetime import datetime, timedelta
+import aio_pika
+from aio_pika import connect_robust, Message
+from aio_pika.abc import AbstractConnection, AbstractChannel, AbstractQueue
 from src.models.base import ScrapingRequest, ScrapingResponse, TaskStatus
-from src.queue.redis_queue import RedisQueue
+from src.config.settings import Settings
 from src.utils.logging import setup_logging
+from src.exceptions import QueueConnectionException
 
 class TaskManager:
-    """작업 생명주기 관리 클래스"""
+    """RabbitMQ 기반 작업 생명주기 관리 클래스"""
 
-    def __init__(self, redis_queue: RedisQueue):
+    def __init__(self, settings: Settings):
         """
         작업 매니저 초기화
 
         Args:
-            redis_queue: Redis 큐 인스턴스
+            settings: 시스템 설정 객체
         """
-        self.redis_queue = redis_queue
-        self.logger = setup_logging(redis_queue.settings)
-        self.cleanup_interval = 300  # 5분마다 정리
+        self.settings = settings
+        self.connection: Optional[AbstractConnection] = None
+        self.channel: Optional[AbstractChannel] = None
+        self.logger = setup_logging(settings)
 
-    async def complete_task(self, response: ScrapingResponse) -> None:
-        """작업 완료 처리"""
-        if not self.redis_queue.redis_client:
+        # 큐 이름 정의
+        self.task_history_exchange = "scraping.task.history"
+        self.worker_status_exchange = "scraping.worker.status"
+
+    async def connect(self) -> None:
+        """RabbitMQ 연결 초기화"""
+        try:
+            self.connection = await connect_robust(
+                self.settings.rabbitmq_url,
+                client_properties={"connection_name": "task-manager"}
+            )
+            self.channel = await self.connection.channel()
+
+            # Exchange 선언
+            await self.channel.declare_exchange(
+                self.task_history_exchange,
+                aio_pika.ExchangeType.TOPIC,
+                durable=True
+            )
+            await self.channel.declare_exchange(
+                self.worker_status_exchange,
+                aio_pika.ExchangeType.TOPIC,
+                durable=True
+            )
+
+            self.logger.info(f"작업 매니저 RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
+        except Exception as e:
+            self.logger.error(f"작업 매니저 RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"작업 매니저 RabbitMQ 연결 실패: {e}")
+
+    async def publish_task_completion(self, response: ScrapingResponse) -> None:
+        """작업 완료 이벤트 발행"""
+        if not self.channel:
             return
 
-        # 처리 중에서 제거
-        await self.redis_queue.redis_client.hdel(
-            self.redis_queue.processing_queue,
-            response.request_id
-        )
-
-        # 완료 큐에 추가
         completion_data = {
             "request_id": response.request_id,
             "status": response.status.value,
@@ -247,80 +429,45 @@ class TaskManager:
             "completed_at": response.completed_at.isoformat() if response.completed_at else None
         }
 
+        routing_key = f"task.{response.status.value.lower()}"
+
+        message = Message(
+            json.dumps(completion_data).encode(),
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+        )
+
+        await self.channel.default_exchange.publish(
+            message,
+            routing_key=self.task_history_exchange + "." + routing_key
+        )
+
         if response.status == TaskStatus.COMPLETED:
-            await self.redis_queue.redis_client.hset(
-                self.redis_queue.completed_queue,
-                response.request_id,
-                json.dumps(completion_data)
-            )
-            self.logger.info(f"작업 완료: {response.request_id}")
+            self.logger.info(f"작업 완료 이벤트 발행: {response.request_id}")
         else:
-            await self.redis_queue.redis_client.hset(
-                self.redis_queue.failed_queue,
-                response.request_id,
-                json.dumps(completion_data)
-            )
-            self.logger.error(f"작업 실패: {response.request_id} - {response.error}")
+            self.logger.error(f"작업 실패 이벤트 발행: {response.request_id} - {response.error}")
 
-    async def get_task_status(self, request_id: str) -> Optional[TaskStatus]:
-        """작업 상태 조회"""
-        if not self.redis_queue.redis_client:
-            return None
+    async def get_queue_metrics(self) -> Dict[str, Any]:
+        """RabbitMQ 큐 메트릭 조회"""
+        if not self.connection:
+            return {}
 
-        # 각 큐에서 작업 상태 확인
-        queues = [
-            (self.redis_queue.task_queue, TaskStatus.PENDING),
-            (self.redis_queue.processing_queue, TaskStatus.RUNNING),
-            (self.redis_queue.completed_queue, TaskStatus.COMPLETED),
-            (self.redis_queue.failed_queue, TaskStatus.FAILED)
-        ]
+        try:
+            # Management API를 통한 큐 통계 조회 (선택사항)
+            # 여기서는 간단한 버전으로 구현
+            return {
+                "task_queue": self.settings.rabbitmq_task_queue,
+                "connection_status": "connected" if not self.connection.is_closed else "disconnected",
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            self.logger.error(f"큐 메트릭 조회 오류: {e}")
+            return {}
 
-        for queue_name, status in queues:
-            if queue_name == self.redis_queue.task_queue:
-                # 리스트 큐에서 검색
-                tasks = await self.redis_queue.redis_client.lrange(queue_name, 0, -1)
-                for task_json in tasks:
-                    task_data = json.loads(task_json)
-                    if task_data["request_id"] == request_id:
-                        return status
-            else:
-                # 해시 큐에서 검색
-                exists = await self.redis_queue.redis_client.hexists(queue_name, request_id)
-                if exists:
-                    return status
-
-        return None
-
-    async def cleanup_old_tasks(self) -> None:
-        """오래된 작업 정리"""
-        if not self.redis_queue.redis_client:
-            return
-
-        cutoff_time = datetime.now() - timedelta(hours=24)
-
-        # 완료된 작업 정리
-        for queue_name in [self.redis_queue.completed_queue, self.redis_queue.failed_queue]:
-            task_ids = await self.redis_queue.redis_client.hkeys(queue_name)
-
-            for task_id in task_ids:
-                task_json = await self.redis_queue.redis_client.hget(queue_name, task_id)
-                if task_json:
-                    task_data = json.loads(task_json)
-                    completed_at = datetime.fromisoformat(task_data["completed_at"])
-
-                    if completed_at < cutoff_time:
-                        await self.redis_queue.redis_client.hdel(queue_name, task_id)
-                        self.logger.info(f"오래된 작업 정리: {task_id}")
-
-    async def start_cleanup_worker(self) -> None:
-        """정리 작업 워커 시작"""
-        while True:
-            try:
-                await self.cleanup_old_tasks()
-                await asyncio.sleep(self.cleanup_interval)
-            except Exception as e:
-                self.logger.error(f"정리 작업 오류: {e}")
-                await asyncio.sleep(60)  # 오류 시 1분 대기
+    async def disconnect(self) -> None:
+        """연결 해제"""
+        if self.connection and not self.connection.is_closed:
+            await self.connection.close()
+            self.logger.info("작업 매니저 RabbitMQ 연결 해제 완료")
 ```
 
 ### Task 3: Worker Monitor
@@ -331,118 +478,151 @@ import asyncio
 import json
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
-from src.queue.redis_queue import RedisQueue
+import aio_pika
+from aio_pika import connect_robust, Message
+from aio_pika.abc import AbstractConnection, AbstractChannel, AbstractQueue
+from src.config.settings import Settings
 from src.utils.logging import setup_logging
+from src.exceptions import QueueConnectionException
 
 class WorkerMonitor:
-    """워커 상태 모니터링 클래스"""
+    """RabbitMQ 기반 워커 상태 모니터링 클래스"""
 
-    def __init__(self, redis_queue: RedisQueue):
+    def __init__(self, settings: Settings):
         """
         워커 모니터 초기화
 
         Args:
-            redis_queue: Redis 큐 인스턴스
+            settings: 시스템 설정 객체
         """
-        self.redis_queue = redis_queue
-        self.logger = setup_logging(redis_queue.settings)
-        self.workers_key = "scraping:workers"
+        self.settings = settings
+        self.connection: Optional[AbstractConnection] = None
+        self.channel: Optional[AbstractChannel] = None
+        self.logger = setup_logging(settings)
         self.heartbeat_timeout = 60  # 1분
 
-    async def register_worker(self, worker_id: str) -> None:
-        """워커 등록"""
-        if not self.redis_queue.redis_client:
+        # Exchange와 큐 이름 정의
+        self.worker_status_exchange = "scraping.worker.status"
+        self.heartbeat_queue = "scraping.worker.heartbeat"
+
+    async def connect(self) -> None:
+        """RabbitMQ 연결 초기화"""
+        try:
+            self.connection = await connect_robust(
+                self.settings.rabbitmq_url,
+                client_properties={"connection_name": "worker-monitor"}
+            )
+            self.channel = await self.connection.channel()
+
+            # Exchange 선언
+            await self.channel.declare_exchange(
+                self.worker_status_exchange,
+                aio_pika.ExchangeType.TOPIC,
+                durable=True
+            )
+
+            # 하트비트 큐 선언
+            await self.channel.declare_queue(
+                self.heartbeat_queue,
+                durable=True
+            )
+
+            self.logger.info(f"워커 모니터 RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
+        except Exception as e:
+            self.logger.error(f"워커 모니터 RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"워커 모니터 RabbitMQ 연결 실패: {e}")
+
+    async def publish_worker_status(self, worker_id: str, status: str, metadata: Dict = None) -> None:
+        """워커 상태 발행"""
+        if not self.channel:
             return
 
         worker_data = {
             "worker_id": worker_id,
-            "registered_at": datetime.now().isoformat(),
-            "last_heartbeat": datetime.now().isoformat(),
-            "status": "active",
-            "tasks_processed": 0
+            "status": status,
+            "timestamp": datetime.now().isoformat(),
+            "metadata": metadata or {}
         }
 
-        await self.redis_queue.redis_client.hset(
-            self.workers_key,
-            worker_id,
-            json.dumps(worker_data)
+        routing_key = f"worker.{status}"
+
+        message = Message(
+            json.dumps(worker_data).encode(),
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
 
-        self.logger.info(f"워커 등록: {worker_id}")
+        await self.channel.default_exchange.publish(
+            message,
+            routing_key=self.worker_status_exchange + "." + routing_key
+        )
 
-    async def update_heartbeat(self, worker_id: str) -> None:
-        """워커 하트비트 업데이트"""
-        if not self.redis_queue.redis_client:
+        self.logger.info(f"워커 상태 발행: {worker_id} -> {status}")
+
+    async def send_heartbeat(self, worker_id: str, stats: Dict = None) -> None:
+        """워커 하트비트 전송"""
+        if not self.channel:
             return
 
-        worker_json = await self.redis_queue.redis_client.hget(self.workers_key, worker_id)
-        if worker_json:
-            worker_data = json.loads(worker_json)
-            worker_data["last_heartbeat"] = datetime.now().isoformat()
+        heartbeat_data = {
+            "worker_id": worker_id,
+            "timestamp": datetime.now().isoformat(),
+            "stats": stats or {}
+        }
 
-            await self.redis_queue.redis_client.hset(
-                self.workers_key,
-                worker_id,
-                json.dumps(worker_data)
-            )
+        message = Message(
+            json.dumps(heartbeat_data).encode(),
+            delivery_mode=aio_pika.DeliveryMode.NOT_PERSISTENT  # 하트비트는 영속성 불필요
+        )
 
-    async def increment_task_counter(self, worker_id: str) -> None:
-        """워커 처리 작업 수 증가"""
-        if not self.redis_queue.redis_client:
+        await self.channel.default_exchange.publish(
+            message,
+            routing_key=self.heartbeat_queue
+        )
+
+    async def start_heartbeat_consumer(self, heartbeat_handler: callable) -> None:
+        """하트비트 소비자 시작"""
+        if not self.channel:
             return
 
-        worker_json = await self.redis_queue.redis_client.hget(self.workers_key, worker_id)
-        if worker_json:
-            worker_data = json.loads(worker_json)
-            worker_data["tasks_processed"] += 1
+        queue = await self.channel.declare_queue(
+            self.heartbeat_queue,
+            durable=True
+        )
 
-            await self.redis_queue.redis_client.hset(
-                self.workers_key,
-                worker_id,
-                json.dumps(worker_data)
-            )
+        async def process_heartbeat(message):
+            async with message.process():
+                try:
+                    heartbeat_data = json.loads(message.body.decode())
+                    await heartbeat_handler(heartbeat_data)
+                except Exception as e:
+                    self.logger.error(f"하트비트 처리 오류: {e}")
 
-    async def get_active_workers(self) -> List[Dict]:
-        """활성 워커 목록 조회"""
-        if not self.redis_queue.redis_client:
-            return []
+        await queue.consume(process_heartbeat)
+        self.logger.info("하트비트 소비자 시작됨")
 
-        workers = []
-        worker_ids = await self.redis_queue.redis_client.hkeys(self.workers_key)
+    async def get_worker_metrics(self) -> Dict[str, Any]:
+        """워커 메트릭 조회"""
+        if not self.connection:
+            return {}
 
-        for worker_id in worker_ids:
-            worker_json = await self.redis_queue.redis_client.hget(self.workers_key, worker_id)
-            if worker_json:
-                worker_data = json.loads(worker_json)
-                last_heartbeat = datetime.fromisoformat(worker_data["last_heartbeat"])
+        try:
+            # RabbitMQ Management API를 통한 워커 통계 조회
+            # 여기서는 기본적인 메트릭만 제공
+            return {
+                "heartbeat_queue": self.heartbeat_queue,
+                "worker_status_exchange": self.worker_status_exchange,
+                "connection_status": "connected" if not self.connection.is_closed else "disconnected",
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            self.logger.error(f"워커 메트릭 조회 오류: {e}")
+            return {}
 
-                # 하트비트 타임아웃 확인
-                if datetime.now() - last_heartbeat < timedelta(seconds=self.heartbeat_timeout):
-                    worker_data["status"] = "active"
-                    workers.append(worker_data)
-                else:
-                    worker_data["status"] = "inactive"
-                    workers.append(worker_data)
-
-        return workers
-
-    async def cleanup_inactive_workers(self) -> None:
-        """비활성 워커 정리"""
-        if not self.redis_queue.redis_client:
-            return
-
-        worker_ids = await self.redis_queue.redis_client.hkeys(self.workers_key)
-
-        for worker_id in worker_ids:
-            worker_json = await self.redis_queue.redis_client.hget(self.workers_key, worker_id)
-            if worker_json:
-                worker_data = json.loads(worker_json)
-                last_heartbeat = datetime.fromisoformat(worker_data["last_heartbeat"])
-
-                # 5분 이상 비활성 워커 제거
-                if datetime.now() - last_heartbeat > timedelta(minutes=5):
-                    await self.redis_queue.redis_client.hdel(self.workers_key, worker_id)
-                    self.logger.info(f"비활성 워커 제거: {worker_id}")
+    async def disconnect(self) -> None:
+        """연결 해제"""
+        if self.connection and not self.connection.is_closed:
+            await self.connection.close()
+            self.logger.info("워커 모니터 RabbitMQ 연결 해제 완료")
 ```
 
 ## Integration Points
@@ -450,16 +630,15 @@ class WorkerMonitor:
 ### Environment Variables (.env) - Updated
 
 ```bash
-# Redis Configuration
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_DB=0
-REDIS_PASSWORD=  # Optional
+# RabbitMQ Configuration
+RABBITMQ_URL=amqp://user:password@localhost:5672/
+RABBITMQ_TASK_QUEUE=scraping_tasks
+RABBITMQ_RESULT_TIMEOUT=300  # seconds
 
 # Queue Configuration
-TASK_QUEUE_TIMEOUT=10
 WORKER_HEARTBEAT_INTERVAL=30
-CLEANUP_INTERVAL=300
+TASK_TIMEOUT=300
+RPC_TIMEOUT=300
 
 # Existing from Phase 1...
 ```
@@ -472,14 +651,14 @@ src/
 │   ├── base.py              # From Phase 1
 │   └── enums.py             # From Phase 1
 ├── config/
-│   └── settings.py          # Updated with queue settings
+│   └── settings.py          # Updated with RabbitMQ settings
 ├── utils/
 │   ├── logging.py           # From Phase 1
 │   └── helpers.py           # From Phase 1
 ├── exceptions.py            # From Phase 1
 └── queue/                   # NEW
     ├── __init__.py
-    ├── redis_queue.py       # Redis queue implementation
+    ├── rabbitmq_rpc.py      # RabbitMQ RPC implementation
     ├── task_manager.py      # Task lifecycle management
     └── worker_monitor.py    # Worker health monitoring
 ```
@@ -502,58 +681,76 @@ uv run ruff check src/queue/ --fix
 # tests/test_queue.py
 import pytest
 import asyncio
+import json
 from unittest.mock import AsyncMock, patch
-from src.queue.redis_queue import RedisQueue
+from src.queue.rabbitmq_rpc import RabbitMQRPC, RabbitMQWorker
 from src.queue.task_manager import TaskManager
 from src.models.base import ScrapingRequest, ScrapingResponse, TaskStatus
 from src.config.settings import Settings
 
-class TestRedisQueue:
-    """Redis 큐 테스트"""
+class TestRabbitMQRPC:
+    """RabbitMQ RPC 테스트"""
 
     @pytest.fixture
-    async def redis_queue(self):
-        """Redis 큐 픽스처"""
+    async def rabbitmq_rpc(self):
+        """RabbitMQ RPC 픽스처"""
         settings = Settings()
-        queue = RedisQueue(settings)
+        rpc = RabbitMQRPC(settings)
 
-        # Mock Redis client
-        queue.redis_client = AsyncMock()
-        return queue
+        # Mock RabbitMQ components
+        rpc.connection = AsyncMock()
+        rpc.channel = AsyncMock()
+        rpc.callback_queue = AsyncMock()
+        rpc.callback_queue.name = "test-callback-queue"
+        return rpc
 
     @pytest.mark.asyncio
-    async def test_enqueue_task(self, redis_queue):
-        """작업 큐 추가 테스트"""
+    async def test_call_async(self, rabbitmq_rpc):
+        """RPC 비동기 호출 테스트"""
         request = ScrapingRequest(
             script_name="test_scraper",
             parameters={"url": "https://example.com"}
         )
 
-        await redis_queue.enqueue_task(request)
+        # Mock future for correlation_id
+        future = asyncio.Future()
+        response = ScrapingResponse(
+            request_id=request.request_id,
+            status=TaskStatus.COMPLETED,
+            data={"result": "success"}
+        )
+        future.set_result(response)
 
-        # Redis lpush 호출 확인
-        redis_queue.redis_client.lpush.assert_called_once()
+        with patch.object(asyncio, 'wait_for', return_value=response):
+            result = await rabbitmq_rpc.call_async(request)
+
+        assert result.request_id == request.request_id
+        assert result.status == TaskStatus.COMPLETED
 
     @pytest.mark.asyncio
-    async def test_dequeue_task(self, redis_queue):
-        """작업 큐 가져오기 테스트"""
-        # Mock Redis brpop response
-        task_data = {
+    async def test_on_response(self, rabbitmq_rpc):
+        """응답 메시지 처리 테스트"""
+        correlation_id = "test-correlation-id"
+        future = asyncio.Future()
+        rabbitmq_rpc.futures[correlation_id] = future
+
+        # Mock 응답 메시지
+        mock_message = AsyncMock()
+        mock_message.correlation_id = correlation_id
+        mock_message.body.decode.return_value = json.dumps({
             "request_id": "test-123",
-            "script_name": "test_scraper",
-            "script_version": None,
-            "parameters": {"url": "https://example.com"},
-            "timeout": 300,
-            "created_at": "2024-01-01T00:00:00",
-            "status": "pending"
-        }
-        redis_queue.redis_client.brpop.return_value = ("queue", json.dumps(task_data))
+            "status": "completed",
+            "data": {"result": "success"},
+            "error": None,
+            "execution_time": 1.5,
+            "completed_at": "2024-01-01T00:00:00"
+        })
 
-        result = await redis_queue.dequeue_task("worker-1")
+        await rabbitmq_rpc._on_response(mock_message)
 
-        assert result is not None
+        assert future.done()
+        result = future.result()
         assert result.request_id == "test-123"
-        assert result.script_name == "test_scraper"
 
 class TestTaskManager:
     """작업 매니저 테스트"""
@@ -562,35 +759,36 @@ class TestTaskManager:
     async def task_manager(self):
         """작업 매니저 픽스처"""
         settings = Settings()
-        redis_queue = RedisQueue(settings)
-        redis_queue.redis_client = AsyncMock()
+        manager = TaskManager(settings)
 
-        return TaskManager(redis_queue)
+        # Mock RabbitMQ components
+        manager.connection = AsyncMock()
+        manager.channel = AsyncMock()
+        return manager
 
     @pytest.mark.asyncio
-    async def test_complete_task(self, task_manager):
-        """작업 완료 테스트"""
+    async def test_publish_task_completion(self, task_manager):
+        """작업 완료 이벤트 발행 테스트"""
         response = ScrapingResponse(
             request_id="test-123",
             status=TaskStatus.COMPLETED,
             data={"result": "success"}
         )
 
-        await task_manager.complete_task(response)
+        await task_manager.publish_task_completion(response)
 
-        # Redis 작업 확인
-        task_manager.redis_queue.redis_client.hdel.assert_called_once()
-        task_manager.redis_queue.redis_client.hset.assert_called_once()
+        # RabbitMQ 메시지 발행 확인
+        task_manager.channel.default_exchange.publish.assert_called_once()
 ```
 
 ```bash
 # Run queue tests
 uv run pytest tests/test_queue.py -v
 
-# Run with Redis integration test
-docker run -d --name redis-test -p 6379:6379 redis:latest
+# Run with RabbitMQ integration test
+docker run -d --name rabbitmq-test -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 uv run pytest tests/test_queue_integration.py -v
-docker stop redis-test && docker rm redis-test
+docker stop rabbitmq-test && docker rm rabbitmq-test
 ```
 
 ### Level 3: Integration Test
@@ -599,59 +797,79 @@ docker stop redis-test && docker rm redis-test
 # tests/test_queue_integration.py
 import pytest
 import asyncio
-from src.queue.redis_queue import RedisQueue
+from src.queue.rabbitmq_rpc import RabbitMQRPC, RabbitMQWorker
 from src.queue.task_manager import TaskManager
 from src.queue.worker_monitor import WorkerMonitor
-from src.models.base import ScrapingRequest, TaskStatus
+from src.models.base import ScrapingRequest, ScrapingResponse, TaskStatus
 from src.config.settings import Settings
 
 @pytest.mark.asyncio
-async def test_full_queue_workflow():
-    """전체 큐 워크플로우 테스트"""
+async def test_full_rpc_workflow():
+    """전체 RabbitMQ RPC 워크플로우 테스트"""
     settings = Settings()
 
-    # 큐 시스템 초기화
-    redis_queue = RedisQueue(settings)
-    await redis_queue.connect()
+    # RPC 시스템 초기화
+    rpc_client = RabbitMQRPC(settings)
+    await rpc_client.connect()
+    await rpc_client.setup_callback_queue()
 
-    task_manager = TaskManager(redis_queue)
-    worker_monitor = WorkerMonitor(redis_queue)
+    task_manager = TaskManager(settings)
+    await task_manager.connect()
 
-    # 워커 등록
-    await worker_monitor.register_worker("test-worker-1")
+    worker_monitor = WorkerMonitor(settings)
+    await worker_monitor.connect()
 
-    # 작업 생성 및 큐에 추가
+    # 워커 상태 발행
+    await worker_monitor.publish_worker_status("test-worker-1", "active")
+
+    # 작업 생성 및 RPC 호출 (타임아웃 테스트)
     request = ScrapingRequest(
         script_name="test_scraper",
         parameters={"url": "https://example.com"}
     )
-    await redis_queue.enqueue_task(request)
 
-    # 작업 상태 확인
-    status = await task_manager.get_task_status(request.request_id)
-    assert status == TaskStatus.PENDING
+    # 실제 워커가 없으므로 타임아웃 발생 예상
+    with pytest.raises(TimeoutError):
+        await rpc_client.call_async(request, timeout=5)
 
-    # 워커에서 작업 가져오기
-    dequeued_task = await redis_queue.dequeue_task("test-worker-1")
-    assert dequeued_task.request_id == request.request_id
+    # 시스템 정리
+    await rpc_client.disconnect()
+    await task_manager.disconnect()
+    await worker_monitor.disconnect()
 
-    # 처리 중 상태 확인
-    status = await task_manager.get_task_status(request.request_id)
-    assert status == TaskStatus.RUNNING
+@pytest.mark.asyncio
+async def test_worker_integration():
+    """워커 통합 테스트"""
+    settings = Settings()
 
-    # 활성 워커 확인
-    active_workers = await worker_monitor.get_active_workers()
-    assert len(active_workers) == 1
-    assert active_workers[0]["worker_id"] == "test-worker-1"
+    async def mock_task_handler(request: ScrapingRequest) -> ScrapingResponse:
+        """모의 작업 처리 함수"""
+        return ScrapingResponse(
+            request_id=request.request_id,
+            status=TaskStatus.COMPLETED,
+            data={"result": "success"}
+        )
+
+    # 워커 초기화
+    worker = RabbitMQWorker(settings, mock_task_handler)
+    await worker.connect()
+
+    # 워커는 백그라운드에서 실행되므로 간단한 연결 테스트만 수행
+    assert worker.connection is not None
+    assert worker.channel is not None
+
+    await worker.disconnect()
 ```
 
 ## Final Validation Checklist
 
-- [ ] Redis connection established successfully
-- [ ] Tasks can be enqueued and dequeued reliably
-- [ ] Worker registration and monitoring works
+- [ ] RabbitMQ connection established successfully
+- [ ] RPC pattern works correctly with correlation_id matching
+- [ ] Worker can consume messages and send responses reliably
 - [ ] Task lifecycle management functions correctly
-- [ ] Failed tasks are handled gracefully
+- [ ] Failed tasks are handled gracefully with retry logic
+- [ ] System can handle multiple workers concurrently
+- [ ] Timeout handling works for long-running tasks
 - [ ] All unit tests pass: `uv run pytest tests/test_queue.py -v`
 - [ ] Integration tests pass: `uv run pytest tests/test_queue_integration.py -v`
 - [ ] No type errors: `uv run mypy src/queue/`
@@ -660,9 +878,10 @@ async def test_full_queue_workflow():
 
 ## Anti-Patterns to Avoid
 
-- ❌ Don't use synchronous Redis operations in async code
-- ❌ Don't ignore Redis connection errors - handle gracefully
-- ❌ Don't store large data in Redis keys - use references
-- ❌ Don't forget to cleanup old tasks and inactive workers
+- ❌ Don't use synchronous RabbitMQ operations in async code
+- ❌ Don't ignore RabbitMQ connection errors - handle gracefully with reconnection
+- ❌ Don't store large data in message payloads - use references or external storage
+- ❌ Don't forget to acknowledge messages properly to prevent message loss
 - ❌ Don't block the event loop with long-running operations
-- ❌ Don't use Redis as a database - it's for caching and queuing
+- ❌ Don't create too many channels - reuse connections and channels efficiently
+- ❌ Don't ignore correlation_id matching - it's critical for RPC pattern reliability

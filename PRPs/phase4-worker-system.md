@@ -100,7 +100,7 @@ src/
 │   └── helpers.py           # Common utilities
 ├── exceptions.py            # Exception classes
 ├── queue/                   # Message queue system
-│   ├── redis_queue.py
+│   ├── rabbitmq_rpc.py
 │   ├── task_manager.py
 │   └── worker_monitor.py
 ├── scripts/                 # Script management
@@ -567,7 +567,7 @@ class ScrapingWorker:
         self.is_shutdown = False
 
         # 컴포넌트 초기화
-        self.redis_queue = None
+        self.rabbitmq_worker = None
         self.task_manager = None
         self.worker_monitor = None
         self.script_executor = None
@@ -581,15 +581,17 @@ class ScrapingWorker:
     async def initialize(self):
         """워커 컴포넌트 초기화"""
         try:
-            # Redis 큐 연결
-            self.redis_queue = RedisQueue(self.settings)
-            await self.redis_queue.connect()
+            # RabbitMQ 워커 연결
+            self.rabbitmq_worker = RabbitMQWorker(self.settings, self._handle_task)
+            await self.rabbitmq_worker.connect()
 
             # 작업 매니저 초기화
-            self.task_manager = TaskManager(self.redis_queue)
+            self.task_manager = TaskManager(self.settings)
+            await self.task_manager.connect()
 
             # 워커 모니터 초기화
-            self.worker_monitor = WorkerMonitor(self.redis_queue)
+            self.worker_monitor = WorkerMonitor(self.settings)
+            await self.worker_monitor.connect()
 
             # 저장소 초기화
             if self.settings.script_repository_type == "git":
@@ -607,8 +609,8 @@ class ScrapingWorker:
             # 스크립트 실행기 초기화
             self.script_executor = ScriptExecutor(self.settings, cache_manager)
 
-            # 워커 등록
-            await self.worker_monitor.register_worker(self.worker_id)
+            # 워커 상태 발행
+            await self.worker_monitor.publish_worker_status(self.worker_id, "active")
 
             self.logger.info(f"워커 초기화 완료: {self.worker_id}")
 
@@ -628,6 +630,9 @@ class ScrapingWorker:
             # 하트비트 작업 시작
             heartbeat_task = asyncio.create_task(self._heartbeat_worker())
 
+            # RabbitMQ 소비 시작
+            await self.rabbitmq_worker.start_consuming()
+
             # 메인 작업 루프 시작
             main_task = asyncio.create_task(self._main_worker_loop())
 
@@ -643,39 +648,46 @@ class ScrapingWorker:
         finally:
             await self.cleanup()
 
+    async def _handle_task(self, request: ScrapingRequest) -> ScrapingResponse:
+        """RabbitMQ 작업 처리 핸들러"""
+        try:
+            self.logger.info(f"작업 처리 시작: {request.request_id}")
+
+            # 작업 실행
+            response = await self.script_executor.execute_scraping_request(request)
+
+            # 작업 완료 이벤트 발행
+            await self.task_manager.publish_task_completion(response)
+
+            # 워커 통계 업데이트 (하트비트에서 처리)
+
+            self.logger.info(f"작업 처리 완료: {request.request_id}")
+            return response
+
+        except Exception as e:
+            self.logger.error(f"작업 처리 오류: {e}")
+            # 오류 응답 반환
+            return ScrapingResponse(
+                request_id=request.request_id,
+                status=TaskStatus.FAILED,
+                error=str(e)
+            )
+
     async def _main_worker_loop(self):
-        """메인 워커 루프"""
+        """메인 워커 루프 (RabbitMQ 소비 중이므로 대기 모드)"""
         while self.is_running and not self.is_shutdown:
             try:
-                # 큐에서 작업 가져오기
-                task = await self.redis_queue.dequeue_task(self.worker_id)
-
-                if task:
-                    self.logger.info(f"작업 처리 시작: {task.request_id}")
-
-                    # 작업 실행
-                    response = await self.script_executor.execute_scraping_request(task)
-
-                    # 결과 보고
-                    await self.task_manager.complete_task(response)
-
-                    # 워커 통계 업데이트
-                    await self.worker_monitor.increment_task_counter(self.worker_id)
-
-                    self.logger.info(f"작업 처리 완료: {task.request_id}")
-                else:
-                    # 작업이 없으면 잠시 대기
-                    await asyncio.sleep(1)
-
+                # RabbitMQ가 메시지를 처리하므로 여기서는 대기만
+                await asyncio.sleep(1)
             except Exception as e:
-                self.logger.error(f"작업 처리 오류: {e}")
-                await asyncio.sleep(5)  # 오류 시 5초 대기
+                self.logger.error(f"워커 루프 오류: {e}")
+                await asyncio.sleep(5)
 
     async def _heartbeat_worker(self):
         """하트비트 워커"""
         while self.is_running and not self.is_shutdown:
             try:
-                await self.worker_monitor.update_heartbeat(self.worker_id)
+                await self.worker_monitor.send_heartbeat(self.worker_id, {"status": "active"})
                 await asyncio.sleep(30)  # 30초마다 하트비트
             except Exception as e:
                 self.logger.error(f"하트비트 오류: {e}")
