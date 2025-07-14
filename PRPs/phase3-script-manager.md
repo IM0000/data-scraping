@@ -2,22 +2,24 @@
 
 ## Goal
 
-Implement a comprehensive script management system that handles downloading, caching, version control, and metadata management for scraping scripts from external repositories. The system should support automatic updates, version comparison, and efficient caching strategies.
+Implement a comprehensive script management system that handles downloading, caching, and modification time-based version control for scraping scripts from external repositories. The system should support automatic updates based on modification time comparison and efficient local disk caching strategies.
 
 ## Why
 
 - **Dynamic execution**: Enables running scripts without hardcoding them into the system
-- **Version control**: Supports script updates and rollbacks with semantic versioning
-- **Performance**: Reduces script download time through intelligent caching
+- **Version control**: Supports script updates based on modification time tracking
+- **Performance**: Reduces script download time through intelligent local disk caching
 - **Reliability**: Ensures script availability even when repository is temporarily unavailable
 - **Metadata management**: Tracks script dependencies, requirements, and configurations
+- **Efficiency**: Only downloads scripts when remote version is newer than cached version
 
 ## What
 
 Build a script management system that includes:
 
 - External repository integration (Git, HTTP, S3)
-- Version-controlled caching with conditional downloads
+- Modification time-based version control with conditional downloads
+- Local disk caching with designated storage paths
 - Script metadata parsing and validation
 - Dependency resolution and requirements management
 - Script integrity verification with checksums
@@ -26,8 +28,10 @@ Build a script management system that includes:
 ### Success Criteria
 
 - [ ] Scripts can be downloaded from external repositories
-- [ ] Version comparison works correctly (semantic versioning)
-- [ ] Caching reduces redundant downloads
+- [ ] Modification time comparison works correctly for version control
+- [ ] Local disk caching reduces redundant downloads
+- [ ] Workers check cached script modification time against remote repository
+- [ ] Scripts are downloaded only when remote version is newer
 - [ ] Script metadata is properly parsed and validated
 - [ ] Dependencies are resolved automatically
 - [ ] Script integrity is verified before execution
@@ -43,23 +47,26 @@ Build a script management system that includes:
   why: Git repository operations for script downloading
 
 - url: https://requests.readthedocs.io/en/latest/
-  why: HTTP downloads for script repositories
+  why: HTTP downloads for script repositories with modification time headers
 
 - url: https://docs.python.org/3/library/urllib.html
   why: URL handling and parsing
 
 - url: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
-  why: AWS S3 integration for script storage
+  why: AWS S3 integration for script storage with modification time
 
-- url: https://semver.org/
-  why: Semantic versioning for script versions
+- url: https://docs.python.org/3/library/os.html#os.path.getmtime
+  why: File modification time operations for local cache
 
 # File and Path Management
 - url: https://docs.python.org/3/library/pathlib.html
-  why: Path operations for script caching
+  why: Path operations for script caching on local disk
 
 - url: https://docs.python.org/3/library/hashlib.html
   why: Script integrity verification
+
+- url: https://docs.python.org/3/library/os.html
+  why: File system operations for cache management
 
 # Dependencies
 - file: PRPs/phase1-core-models.md
@@ -1003,7 +1010,7 @@ async def test_full_script_workflow():
 ## Final Validation Checklist
 
 - [ ] Scripts can be downloaded from external repositories
-- [ ] Version comparison and caching work correctly
+- [ ] Modification time comparison and caching work correctly
 - [ ] Metadata is properly parsed and validated
 - [ ] Cache cleanup functions correctly
 - [ ] All unit tests pass: `uv run pytest tests/test_scripts.py -v`

@@ -2,35 +2,39 @@
 
 ## Goal
 
-Implement a robust worker system that retrieves tasks from the message queue, downloads and executes scraping scripts in isolated child processes, and reports results back to the queue. The system should handle process isolation, resource management, error handling, and concurrent task execution.
+Implement a robust worker system that retrieves tasks from RabbitMQ queue, downloads and executes scraping scripts in isolated child processes, and reports results back via RPC reply_to queues. The system should handle process isolation, resource management, error handling, and concurrent task execution to ensure worker stability.
 
 ## Why
 
-- **Process isolation**: Ensures script execution doesn't affect the main worker process
-- **Resource management**: Controls CPU, memory, and execution time limits
+- **Process isolation**: Ensures script execution doesn't affect the main worker process - critical for worker stability
+- **Worker stability**: Prevents script failures (bugs, infinite loops, memory leaks) from crashing the entire worker
+- **Resource management**: Controls CPU, memory, and execution time limits for each script
 - **Scalability**: Supports multiple concurrent tasks and horizontal scaling
-- **Reliability**: Handles script failures gracefully without crashing the worker
+- **Reliability**: Handles script failures gracefully without affecting other tasks
 - **Security**: Prevents malicious scripts from affecting the system
+- **RPC communication**: Enables synchronous response delivery using correlation_id pattern
 
 ## What
 
 Build a comprehensive worker system that includes:
 
-- Task retrieval from Redis queue with worker registration
-- Script download and execution in child processes
-- Resource monitoring and limit enforcement
+- Task retrieval from RabbitMQ queue with RPC pattern support
+- Script download and execution in sandboxed child processes for isolation
+- Resource monitoring and limit enforcement per script execution
 - Error handling and recovery mechanisms
-- Result reporting and status updates
+- Result reporting via RabbitMQ reply_to queues with correlation_id
 - Heartbeat monitoring and worker health checks
+- Connection management and recovery for RabbitMQ
 
 ### Success Criteria
 
-- [ ] Workers can retrieve tasks from queue reliably
-- [ ] Scripts execute in isolated child processes
-- [ ] Resource limits are enforced correctly
-- [ ] Failed scripts don't crash the worker
-- [ ] Results are reported back to queue
+- [ ] Workers can retrieve tasks from RabbitMQ queue reliably
+- [ ] Scripts execute in isolated child processes without affecting worker
+- [ ] Resource limits are enforced correctly per script execution
+- [ ] Failed scripts don't crash the worker process
+- [ ] Results are reported back via reply_to queues with correct correlation_id
 - [ ] Multiple workers can run concurrently
+- [ ] RabbitMQ connection recovery works properly
 - [ ] All validation gates pass
 
 ## All Needed Context
@@ -40,7 +44,7 @@ Build a comprehensive worker system that includes:
 ```yaml
 # Process Management
 - url: https://docs.python.org/3/library/subprocess.html
-  why: Child process execution and management
+  why: Child process execution and management for script isolation
 
 - url: https://docs.python.org/3/library/multiprocessing.html
   why: Process pools and resource sharing
@@ -50,17 +54,27 @@ Build a comprehensive worker system that includes:
 
 # Resource Management
 - url: https://docs.python.org/3/library/resource.html
-  why: System resource monitoring and limits
+  why: System resource monitoring and limits for child processes
 
 - url: https://psutil.readthedocs.io/en/latest/
   why: Process and system monitoring
+
+# RabbitMQ Integration
+- url: https://www.rabbitmq.com/tutorials/tutorial-six-python.html
+  why: RPC pattern implementation for task processing
+
+- url: https://pika.readthedocs.io/en/stable/
+  why: RabbitMQ client for task consumption and result publishing
+
+- url: https://aio-pika.readthedocs.io/en/latest/
+  why: Async RabbitMQ client for high-performance task processing
 
 # Dependencies
 - file: PRPs/phase1-core-models.md
   why: Uses core data models and exceptions
 
 - file: PRPs/phase2-message-queue.md
-  why: Queue integration and task management
+  why: RabbitMQ RPC integration and task management
 
 - file: PRPs/phase3-script-manager.md
   why: Script downloading and caching
@@ -979,12 +993,13 @@ async def test_full_worker_integration():
 
 ## Final Validation Checklist
 
-- [ ] Workers can retrieve tasks from queue reliably
-- [ ] Scripts execute in isolated child processes
-- [ ] Resource limits are enforced correctly
-- [ ] Failed scripts don't crash the worker
-- [ ] Results are reported back to queue
+- [ ] Workers can retrieve tasks from RabbitMQ queue reliably
+- [ ] Scripts execute in isolated child processes without affecting worker
+- [ ] Resource limits are enforced correctly per script execution
+- [ ] Failed scripts don't crash the worker process
+- [ ] Results are reported back via reply_to queues with correct correlation_id
 - [ ] Multiple workers can run concurrently
+- [ ] RabbitMQ connection recovery works properly
 - [ ] All unit tests pass: `uv run pytest tests/test_worker.py -v`
 - [ ] Integration tests pass: `uv run pytest tests/test_worker_integration.py -v`
 - [ ] No type errors: `uv run mypy src/worker/`

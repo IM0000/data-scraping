@@ -1,35 +1,38 @@
-# PRP-2: Message Queue System
+# PRP-2: RabbitMQ RPC Communication System
 
 ## Goal
 
-Implement a Redis-based message queue system for distributed communication between the Gateway and Workers. The system should handle task queuing, worker health monitoring, and reliable message delivery with retry mechanisms.
+Implement a RabbitMQ-based RPC communication system for distributed communication between the Gateway and Workers. The system should handle synchronous request-response patterns using correlation_id and reply_to queues, with robust error handling and timeout mechanisms.
 
 ## Why
 
+- **Synchronous communication**: Enables gateway to wait for worker responses synchronously
 - **Decoupling**: Separates Gateway and Worker components for better scalability
-- **Reliability**: Ensures tasks are not lost even if workers are temporarily unavailable
+- **Reliability**: RabbitMQ provides guaranteed message delivery and persistence
 - **Scalability**: Supports multiple worker instances and horizontal scaling
 - **Monitoring**: Provides visibility into task status and worker health
-- **Load balancing**: Distributes tasks efficiently across available workers
+- **Load balancing**: Distributes tasks efficiently across available workers using RabbitMQ's built-in load balancing
 
 ## What
 
-Build a comprehensive message queue system that includes:
+Build a comprehensive RabbitMQ RPC system that includes:
 
-- Redis-based task queue with priority support
-- Worker registration and health monitoring
-- Task lifecycle management (pending, processing, completed, failed)
-- Dead letter queue for failed tasks
-- Rate limiting and backpressure handling
+- RabbitMQ-based RPC pattern with correlation_id and reply_to queues
+- Task queue management for worker task distribution
+- Worker health monitoring and registration
+- Timeout handling for synchronous responses
+- Error handling and retry mechanisms
+- Connection pooling and recovery
 - Real-time status updates and metrics
 
 ### Success Criteria
 
-- [ ] Tasks are queued and processed reliably
+- [ ] RPC pattern works correctly with correlation_id matching
+- [ ] Gateway can send tasks and receive responses synchronously
 - [ ] Worker health monitoring works correctly
 - [ ] Failed tasks are handled gracefully with retry logic
 - [ ] System can handle multiple workers concurrently
-- [ ] Real-time status updates are available
+- [ ] Timeout handling works for long-running tasks
 - [ ] All validation gates pass
 
 ## All Needed Context
@@ -37,28 +40,29 @@ Build a comprehensive message queue system that includes:
 ### Documentation & References
 
 ```yaml
-# Redis and Message Queue
-- url: https://redis.io/docs/manual/data-types/
-  why: Understanding Redis data structures for queue implementation
+# RabbitMQ and RPC Pattern
+- url: https://www.rabbitmq.com/tutorials/tutorial-six-python.html
+  why: Official RabbitMQ RPC tutorial with correlation_id pattern
 
-- url: https://python-rq.org/
-  why: Python Redis Queue patterns and best practices
+- url: https://pika.readthedocs.io/en/stable/
+  why: Python RabbitMQ client library documentation
 
-- url: https://docs.celeryq.dev/en/stable/
-  why: Distributed task queue architecture patterns
+- url: https://aio-pika.readthedocs.io/en/latest/
+  why: Async RabbitMQ client for high-performance applications
 
-- url: https://docs.aioredis.io/en/stable/
-  why: Async Redis client for Python
+- url: https://www.rabbitmq.com/confirms.html
+  why: Message acknowledgment and reliability patterns
 
-# Dependencies
-- file: PRPs/phase1-core-models.md
-  why: Uses core data models and configuration system
+# Connection Management
+- url: https://www.rabbitmq.com/connection-blocked.html
+  why: Connection management and recovery patterns
 
-- file: examples/basic_structure.py
-  why: Follow existing coding patterns and class structure
+- url: https://www.rabbitmq.com/heartbeats.html
+  why: Health monitoring and connection keepalive
 
-- file: examples/test_pattern.py
-  why: Test patterns for validation gates
+# Error Handling
+- url: https://www.rabbitmq.com/dlx.html
+  why: Dead letter exchange for failed message handling
 ```
 
 ### Current Codebase Structure (After Phase 1)

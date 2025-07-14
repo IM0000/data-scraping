@@ -2,16 +2,17 @@
 
 ## Goal
 
-Implement a FastAPI-based REST API gateway that receives scraping requests via HTTP, validates input, forwards tasks to the message queue, and returns results synchronously with timeout handling. The API should support authentication, rate limiting, and real-time status monitoring.
+Implement a FastAPI-based REST API gateway that receives scraping requests via HTTP, validates input, forwards tasks to RabbitMQ using RPC pattern, and returns results synchronously with correlation_id matching and timeout handling. The API should support authentication, rate limiting, and real-time status monitoring.
 
 ## Why
 
 - **HTTP Interface**: Provides standard REST API access for clients
-- **Synchronous responses**: Clients get immediate results without polling
+- **Synchronous responses**: Clients get immediate results using RabbitMQ RPC pattern without polling
 - **Input validation**: Ensures request data integrity before processing
 - **Rate limiting**: Prevents system overload from excessive requests
 - **Authentication**: Secures API access with token-based authentication
 - **Monitoring**: Real-time visibility into system status and performance
+- **RPC communication**: Enables synchronous request-response pattern with correlation_id
 
 ## What
 
@@ -19,7 +20,8 @@ Build a comprehensive API gateway that includes:
 
 - FastAPI REST endpoints for scraping requests
 - Request validation and parameter sanitization
-- Task queuing with synchronous response handling
+- RabbitMQ RPC integration with correlation_id and reply_to queues
+- Synchronous response handling with timeout management
 - Real-time WebSocket connections for status updates
 - Authentication middleware with API keys
 - Rate limiting and request throttling
@@ -28,7 +30,8 @@ Build a comprehensive API gateway that includes:
 ### Success Criteria
 
 - [ ] API accepts and validates scraping requests
-- [ ] Tasks are queued and results returned synchronously
+- [ ] Tasks are sent to RabbitMQ with correlation_id and reply_to queue
+- [ ] Results are received synchronously via RPC pattern with timeout
 - [ ] WebSocket connections provide real-time updates
 - [ ] Authentication and rate limiting work correctly
 - [ ] Health checks report system status accurately
@@ -50,6 +53,16 @@ Build a comprehensive API gateway that includes:
 - url: https://fastapi.tiangolo.com/advanced/websockets/
   why: WebSocket implementation for real-time updates
 
+- url: https://fastapi.tiangolo.com/async/
+  why: Async/await patterns for RabbitMQ RPC integration
+
+# RabbitMQ Integration
+- url: https://www.rabbitmq.com/tutorials/tutorial-six-python.html
+  why: RPC pattern implementation for synchronous responses
+
+- url: https://aio-pika.readthedocs.io/en/latest/
+  why: Async RabbitMQ client for FastAPI integration
+
 # Additional Libraries
 - url: https://slowapi.readthedocs.io/
   why: Rate limiting for FastAPI
@@ -62,7 +75,7 @@ Build a comprehensive API gateway that includes:
   why: Uses core data models and configuration
 
 - file: PRPs/phase2-message-queue.md
-  why: Queue integration for task management
+  why: RabbitMQ RPC integration for task management
 
 - file: examples/basic_structure.py
   why: Follow existing coding patterns

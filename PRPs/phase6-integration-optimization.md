@@ -2,37 +2,37 @@
 
 ## Goal
 
-Integrate all system components into a complete distributed scraping system with comprehensive testing, performance optimization, monitoring, and production-ready deployment configurations. This phase focuses on system-wide integration, end-to-end testing, and operational excellence.
+Integrate all system components into a complete distributed scraping system with comprehensive testing, performance optimization, monitoring, and production-ready deployment configurations. This phase focuses on system-wide integration, end-to-end testing of RabbitMQ RPC patterns, and operational excellence.
 
 ## Why
 
-- **System integration**: Ensures all components work together seamlessly
-- **Performance optimization**: Maximizes throughput and minimizes latency
-- **Monitoring & observability**: Provides visibility into system health and performance
-- **Production readiness**: Prepares the system for real-world deployment
-- **Operational excellence**: Establishes best practices for maintenance and scaling
+- **System integration**: Ensures all components work together seamlessly with RabbitMQ RPC communication
+- **Performance optimization**: Maximizes throughput and minimizes latency in distributed environment
+- **Monitoring & observability**: Provides visibility into system health and RabbitMQ queue performance
+- **Production readiness**: Prepares the system for real-world deployment with proper scaling
+- **Operational excellence**: Establishes best practices for maintenance and scaling of distributed systems
 
 ## What
 
 Build a complete production-ready system that includes:
 
-- End-to-end integration testing across all components
-- Performance benchmarking and optimization
-- Comprehensive monitoring and alerting
-- Docker containerization and orchestration
+- End-to-end integration testing across all components with RabbitMQ RPC pattern validation
+- Performance benchmarking and optimization for distributed communication
+- Comprehensive monitoring and alerting for RabbitMQ queues and worker health
+- Docker containerization and orchestration with RabbitMQ clustering
 - CI/CD pipeline configuration
 - Production deployment documentation
 - System scaling and load balancing
 
 ### Success Criteria
 
-- [ ] All components integrate successfully
-- [ ] End-to-end tests pass consistently
-- [ ] Performance benchmarks meet requirements
-- [ ] Monitoring dashboards are functional
-- [ ] Docker containers build and run correctly
-- [ ] Documentation is complete and accurate
-- [ ] System can handle production workloads
+- [ ] All components integrate successfully with RabbitMQ RPC communication
+- [ ] End-to-end tests pass consistently including correlation_id validation
+- [ ] Performance benchmarks meet requirements for distributed workloads
+- [ ] Monitoring dashboards track RabbitMQ queue metrics and worker status
+- [ ] Docker containers build and run correctly with RabbitMQ clustering
+- [ ] Documentation is complete and accurate for distributed deployment
+- [ ] System can handle production workloads with proper scaling
 
 ## All Needed Context
 
@@ -48,6 +48,16 @@ Build a complete production-ready system that includes:
 
 - url: https://kubernetes.io/docs/
   why: Container orchestration (optional)
+
+# RabbitMQ Monitoring
+- url: https://www.rabbitmq.com/monitoring.html
+  why: RabbitMQ monitoring and metrics collection
+
+- url: https://www.rabbitmq.com/management.html
+  why: RabbitMQ management plugin for monitoring
+
+- url: https://www.rabbitmq.com/clustering.html
+  why: RabbitMQ clustering for high availability
 
 # Monitoring & Observability
 - url: https://prometheus.io/docs/
@@ -71,7 +81,7 @@ Build a complete production-ready system that includes:
   why: Core system foundation
 
 - file: PRPs/phase2-message-queue.md
-  why: Queue system integration
+  why: RabbitMQ RPC system integration
 
 - file: PRPs/phase3-script-manager.md
   why: Script management integration
@@ -474,6 +484,27 @@ class TestPerformanceOptimization:
 
 ### Task 3: Docker Configuration
 
+**Dependency Management Strategy:**
+
+- **Project Dependencies**: Use `pyproject.toml` + `uv` (Core system dependencies for Gateway, Worker, etc.)
+- **Script Dependencies**: Use `requirements.txt` (Dynamic dependencies for individual scraping scripts)
+
+Each scraping script can include its own `requirements.txt` in its directory. The worker's child process will install these dependencies in an isolated virtual environment before script execution.
+
+**Script Directory Structure Example:**
+
+```
+scripts/
+├── example_scraper/
+│   ├── scraper.py
+│   └── requirements.txt  # 이 스크립트만의 의존성
+├── advanced_scraper/
+│   ├── scraper.py
+│   └── requirements.txt  # 다른 의존성 조합
+└── simple_scraper/
+    └── scraper.py        # requirements.txt 없음 (기본 의존성만 사용)
+```
+
 ```dockerfile
 # docker/Dockerfile.api
 FROM python:3.11-slim
@@ -486,9 +517,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 의존성 설치
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# uv 설치
+RUN pip install --no-cache-dir uv
+
+# 프로젝트 의존성 파일 복사 (Docker 레이어 캐시 활용)
+COPY pyproject.toml uv.lock* ./
+
+# uv를 사용하여 프로젝트 의존성 설치
+RUN uv pip sync --system
 
 # 애플리케이션 코드 복사
 COPY src/ src/
@@ -517,13 +553,21 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 의존성 설치
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# uv 설치
+RUN pip install --no-cache-dir uv
+
+# 프로젝트 의존성 파일 복사 (Docker 레이어 캐시 활용)
+COPY pyproject.toml uv.lock* ./
+
+# uv를 사용하여 프로젝트 의존성 설치
+RUN uv pip sync --system
 
 # 애플리케이션 코드 복사
 COPY src/ src/
 COPY .env .env
+
+# 스크립트 캐시 디렉터리 생성
+RUN mkdir -p /app/cache/scripts
 
 # 워커 실행
 CMD ["python", "-m", "src.worker.worker_main"]
@@ -798,21 +842,52 @@ echo "=== 배포 완료 ==="
 
 ## Final Validation Checklist
 
-- [ ] All components integrate successfully
-- [ ] End-to-end tests pass consistently: `uv run pytest tests/test_e2e_integration.py -v`
-- [ ] Performance benchmarks meet requirements: `uv run pytest tests/test_performance.py -v`
-- [ ] Docker containers build and run correctly: `docker-compose up -d`
+### Dependency Management Validation
+
+- [ ] Project dependencies are properly defined in `pyproject.toml`: `uv tree`
+- [ ] Development dependencies are installed correctly: `uv sync --dev`
+- [ ] Lock file is up to date: `uv lock --check`
+
+### System Integration Validation
+
+- [ ] All components integrate successfully with RabbitMQ RPC communication
+- [ ] End-to-end tests pass consistently including correlation_id validation: `uv run pytest tests/test_e2e_integration.py -v`
+- [ ] Performance benchmarks meet requirements for distributed workloads: `uv run pytest tests/test_performance.py -v`
+- [ ] Docker containers build and run correctly with RabbitMQ clustering: `docker-compose up -d`
+
+### Repository Integration Validation
+
+- [ ] Git repository integration works correctly (if configured)
+- [ ] HTTP repository integration works correctly (if configured)
 - [ ] S3 repository integration works correctly (if configured)
 - [ ] boto3 dependency is installed for S3 support: `uv add boto3`
+
+### Monitoring and Documentation Validation
+
 - [ ] Monitoring dashboards are functional: http://localhost:3000
 - [ ] API documentation is complete: http://localhost:8000/docs
 - [ ] All unit tests pass: `uv run pytest tests/ -v`
 - [ ] No type errors across all modules: `uv run mypy src/`
 - [ ] No linting errors: `uv run ruff check src/`
-- [ ] System can handle production workloads (load testing)
-- [ ] Documentation is complete and accurate
+- [ ] System can handle production workloads with proper scaling (load testing)
+- [ ] Documentation is complete and accurate for distributed deployment
+
+### Script Dependency Management Validation
+
+- [ ] Per-script `requirements.txt` files are processed correctly
+- [ ] Worker installs dependencies in isolated environment before script execution
+- [ ] Script dependency conflicts do not affect the system
 
 ## Anti-Patterns to Avoid
+
+### Dependency Management Related
+
+- ❌ Don't mix package managers - use `uv` for project dependencies, not `pip` or `poetry`
+- ❌ Don't put script-specific dependencies in `pyproject.toml` - use per-script `requirements.txt`
+- ❌ Don't skip dependency locking - always commit `uv.lock` file
+- ❌ Don't install system packages in Docker without cleanup - use multi-stage builds
+
+### System Integration Related
 
 - ❌ Don't skip integration testing - test all component interactions
 - ❌ Don't ignore performance bottlenecks - profile and optimize

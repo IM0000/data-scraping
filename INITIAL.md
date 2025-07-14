@@ -7,17 +7,17 @@ Build a distributed web scraping system using Python with gateway-worker archite
 **Core Components:**
 
 - **Gateway**: Receives scraping requests via HTTP API and forwards them to message queue
-- **Message Queue**: Manages scraping tasks between gateway and workers
+- **Message Queue**: Manages scraping tasks between gateway and workers using RabbitMQ RPC pattern
 - **Worker**: Processes tasks from queue, downloads and executes scraping scripts in child processes
 - **Script Storage**: External repository for site-specific and task-specific scraping scripts
-- **Caching System**: Version-controlled caching of scraping scripts
+- **Caching System**: Version-controlled caching of scraping scripts with modification time tracking
 
 **Key Requirements:**
 
-- Gateway-worker architecture with message queue communication
-- Dynamic script execution with child process isolation
-- Synchronous response delivery with timeout handling
-- Version-controlled script caching and automatic updates
+- Gateway-worker architecture with RabbitMQ RPC communication
+- Dynamic script execution with child process isolation for security and stability
+- Synchronous response delivery with timeout handling using correlation_id pattern
+- Version-controlled script caching with automatic updates based on modification time
 - Flexible input parameter system for script execution
 - Support for HTTP scraping, captcha handling (pydoll), and browser automation
 - Site-specific and task-specific script management
@@ -26,9 +26,10 @@ Build a distributed web scraping system using Python with gateway-worker archite
 
 - Language: Python
 - Architecture: Distributed gateway-worker pattern
+- Message Queue: RabbitMQ with RPC pattern (correlation_id, reply_to)
 - Script Storage: External repository with version control (supports Git, HTTP, S3, etc.)
-- Execution: Child process isolation for security
-- Caching: Version comparison and conditional downloads
+- Execution: Child process isolation for security and worker stability
+- Caching: Modification time comparison and conditional downloads to local disk
 - Protocols: HTTP for scraping, browser automation when needed
 
 ## EXAMPLES:
@@ -37,7 +38,7 @@ Currently the examples/ folder is empty. Please create the following examples du
 
 - `gateway/` - API gateway patterns and request handling
 - `worker/` - Worker process patterns and task execution
-- `queue/` - Message queue integration patterns
+- `queue/` - RabbitMQ RPC integration patterns
 - `script_manager/` - Script downloading, caching, and version management
 - `scrapers/` - Sample scraping script templates
 - `models/` - Data models for requests, responses, and configurations
@@ -47,9 +48,9 @@ Currently the examples/ folder is empty. Please create the following examples du
 
 **Message Queue Systems:**
 
-- https://docs.celeryq.dev/en/stable/ (Celery)
-- https://python-rq.org/ (RQ)
-- https://docs.aioredis.io/en/stable/ (Redis)
+- https://www.rabbitmq.com/tutorials/tutorial-six-python.html (RabbitMQ RPC)
+- https://pika.readthedocs.io/en/stable/ (Pika - Python RabbitMQ client)
+- https://aio-pika.readthedocs.io/en/latest/ (Async RabbitMQ client)
 
 **Web Scraping Libraries:**
 
@@ -78,15 +79,15 @@ Currently the examples/ folder is empty. Please create the following examples du
 
 **Architecture Recommendations:**
 
-- Use Redis as message broker for high performance
-- Implement FastAPI for gateway REST API
-- Use Celery or RQ for worker task management
+- Use RabbitMQ as message broker for robust RPC-style communication
+- Implement FastAPI for gateway REST API with async/await support
+- Use aio-pika for asynchronous RabbitMQ communication
 - Consider Docker containers for worker isolation
 - Implement health checks for worker monitoring
 
 **Security & Isolation:**
 
-- Run scraping scripts in sandboxed child processes
+- Run scraping scripts in sandboxed child processes to prevent script failures from crashing the worker process
 - Implement script validation before execution
 - Use resource limits (CPU, memory, timeout) for script execution
 - Validate and sanitize input parameters
@@ -107,20 +108,22 @@ Currently the examples/ folder is empty. Please create the following examples du
 
 **Script Management:**
 
-- Use semantic versioning for scripts
+- Use modification time tracking for script version control
+- Workers check local cached script modification time against remote repository
+- Download and cache scripts only when remote version is newer
+- Store cached scripts in worker's local disk at designated path
 - Implement script metadata (dependencies, requirements)
 - Support for script-specific configuration
-- Consider script hot-reloading capabilities
 - Script storage supports Git, HTTP, and S3-compatible object storage
 - S3 is recommended for large-scale or cloud-native deployments
 
 **Data Flow:**
 
 1. Client → Gateway (HTTP request with script info + parameters)
-2. Gateway → Message Queue (task creation)
-3. Worker → Script Storage (version check + download if needed)
-4. Worker → Child Process (script execution with parameters)
-5. Worker → Gateway (synchronous result delivery)
+2. Gateway → RabbitMQ (task creation with correlation_id and reply_to queue)
+3. Worker → Script Storage (modification time check + download if needed)
+4. Worker → Child Process (script execution with parameters for isolation)
+5. Worker → Gateway (result delivery via reply_to queue with correlation_id)
 6. Gateway → Client (HTTP response with timeout handling)
 
 **Additional Components to Consider:**
@@ -159,6 +162,14 @@ S3_SECRET_KEY=your-secret-key
 S3_PREFIX=scripts/  # Optional prefix for organization
 ```
 
+RabbitMQ Configuration:
+
+```
+RABBITMQ_URL=amqp://user:password@localhost:5672/
+RABBITMQ_TASK_QUEUE=scraping_tasks
+RABBITMQ_RESULT_TIMEOUT=300  # seconds
+```
+
 ## PRP Generation Plan
 
 **System Complexity Analysis:**
@@ -177,10 +188,10 @@ This Gateway-Worker Scraping System consists of 5 major components forming a dis
 
 ### Phase 2: Message Queue System
 
-**PRP-2: Message Queue System**
+**PRP-2: RabbitMQ RPC Communication System**
 
-- Redis-based message broker implementation
-- Task queue management (creation, retrieval, status updates)
+- RabbitMQ-based RPC pattern implementation
+- Task queue management with correlation_id and reply_to
 - Worker health checks and monitoring
 - Dependencies: PRP-1 (uses common models)
 
@@ -189,7 +200,7 @@ This Gateway-Worker Scraping System consists of 5 major components forming a dis
 **PRP-3: Script Manager**
 
 - Script downloads from external repositories
-- Version control and caching system
+- Modification time-based version control and caching system
 - Script metadata management
 - Dependencies: PRP-1 (uses common models)
 
@@ -197,8 +208,8 @@ This Gateway-Worker Scraping System consists of 5 major components forming a dis
 
 **PRP-4: Worker System**
 
-- Task retrieval from queue
-- Script execution in child processes
+- Task retrieval from RabbitMQ queue
+- Script execution in child processes for isolation
 - Result processing and error handling
 - Dependencies: PRP-1, PRP-2, PRP-3 (uses all previous components)
 
@@ -207,8 +218,8 @@ This Gateway-Worker Scraping System consists of 5 major components forming a dis
 **PRP-5: Gateway API**
 
 - FastAPI-based REST API implementation
-- Request validation and queue forwarding
-- Synchronous response handling (with timeout)
+- Request validation and RabbitMQ RPC forwarding
+- Synchronous response handling with correlation_id (with timeout)
 - Dependencies: PRP-1, PRP-2 (uses models and queue system)
 
 ### Phase 6: System Integration & Optimization

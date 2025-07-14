@@ -10,7 +10,7 @@ Create the foundational data models, shared utilities, and configuration managem
 - **Type safety**: Ensures consistent data structures across the distributed system
 - **Error handling**: Provides standardized exception handling patterns
 - **Logging consistency**: Establishes unified logging in Korean across all components
-- **Configuration management**: Centralizes system configuration and environment variables
+- **Configuration management**: Centralizes system configuration and environment variables including RabbitMQ settings
 
 ## What
 
@@ -18,7 +18,7 @@ Build the core foundation that includes:
 
 - Data models for requests, responses, tasks, and scripts
 - Shared utilities and helper functions
-- Configuration management with environment variables
+- Configuration management with environment variables (including RabbitMQ settings)
 - Exception handling classes
 - Logging system with Korean messages
 - Common constants and enums
@@ -26,7 +26,7 @@ Build the core foundation that includes:
 ### Success Criteria
 
 - [ ] All data models defined with proper type hints
-- [ ] Configuration system loads from environment variables
+- [ ] Configuration system loads from environment variables including RabbitMQ settings
 - [ ] Logging system outputs Korean messages consistently
 - [ ] Exception handling covers all error scenarios
 - [ ] Unit tests achieve 100% coverage
@@ -48,20 +48,17 @@ Build the core foundation that includes:
   why: Data validation and serialization patterns
 
 - url: https://docs.python.org/3/library/logging.html
-  why: Logging system configuration and usage
+  why: Structured logging implementation in Korean
 
 - url: https://python-dotenv.readthedocs.io/en/latest/
   why: Environment variable management
 
-# Existing patterns
-- file: examples/basic_structure.py
-  why: Follow existing coding patterns and class structure
+# RabbitMQ Configuration
+- url: https://pika.readthedocs.io/en/stable/
+  why: RabbitMQ connection configuration patterns
 
-- file: examples/test_pattern.py
-  why: Test patterns for validation gates
-
-- file: examples/README.md
-  why: Documentation patterns and Korean language usage
+- url: https://www.rabbitmq.com/tutorials/tutorial-six-python.html
+  why: RPC pattern configuration requirements
 ```
 
 ### Current Codebase Structure
