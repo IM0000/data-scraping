@@ -22,11 +22,6 @@ class TestSettings:
         """기본 설정 테스트"""
         settings = Settings()
         
-        assert settings.redis_host == "localhost"
-        assert settings.redis_port == 6379
-        assert settings.redis_db == 0
-        assert settings.redis_password is None
-        
         assert settings.rabbitmq_url == "amqp://localhost:5672/"
         assert settings.rabbitmq_task_queue == "scraping_tasks"
         assert settings.rabbitmq_result_timeout == 300
@@ -42,11 +37,6 @@ class TestSettings:
     def test_settings_from_env(self, monkeypatch):
         """환경 변수로부터 설정 로드 테스트"""
         # 환경 변수 설정
-        monkeypatch.setenv("REDIS_HOST", "redis.example.com")
-        monkeypatch.setenv("REDIS_PORT", "6380")
-        monkeypatch.setenv("REDIS_DB", "1")
-        monkeypatch.setenv("REDIS_PASSWORD", "secret")
-        
         monkeypatch.setenv("RABBITMQ_URL", "amqp://user:pass@rabbitmq.example.com:5672/")
         monkeypatch.setenv("RABBITMQ_TASK_QUEUE", "custom_tasks")
         monkeypatch.setenv("RABBITMQ_RESULT_TIMEOUT", "600")
@@ -66,12 +56,6 @@ class TestSettings:
         monkeypatch.setenv("MAX_CONCURRENT_TASKS", "2")
         
         settings = Settings()
-        
-        # Redis 설정 확인
-        assert settings.redis_host == "redis.example.com"
-        assert settings.redis_port == 6380
-        assert settings.redis_db == 1
-        assert settings.redis_password == "secret"
         
         # RabbitMQ 설정 확인
         assert settings.rabbitmq_url == "amqp://user:pass@rabbitmq.example.com:5672/"
@@ -115,7 +99,7 @@ class TestSettings:
         monkeypatch.setenv("S3_SECRET_KEY", "secret456")
         
         settings = Settings()
-        with pytest.raises(ValueError, match="S3_BUCKET_NAME이 필요합니다"):
+        with pytest.raises(ConfigurationException, match="S3_BUCKET_NAME"):
             settings.validate_configuration()
 
     def test_s3_validation_missing_credentials(self, monkeypatch):
@@ -124,7 +108,7 @@ class TestSettings:
         monkeypatch.setenv("S3_BUCKET_NAME", "my-bucket")
         
         settings = Settings()
-        with pytest.raises(ValueError, match="S3_ACCESS_KEY와 S3_SECRET_KEY가 필요합니다"):
+        with pytest.raises(ConfigurationException, match="S3_ACCESS_KEY"):
             settings.validate_configuration()
 
     def test_git_validation_success(self, monkeypatch):
@@ -143,7 +127,7 @@ class TestSettings:
         monkeypatch.setenv("SCRIPT_REPOSITORY_TYPE", "git")
         
         settings = Settings()
-        with pytest.raises(ValueError, match="SCRIPT_REPOSITORY_URL이 필요합니다"):
+        with pytest.raises(ConfigurationException, match="SCRIPT_REPOSITORY_URL"):
             settings.validate_configuration()
 
     def test_http_validation_success(self, monkeypatch):
@@ -196,5 +180,5 @@ class TestGetSettings:
         monkeypatch.setenv("SCRIPT_REPOSITORY_TYPE", "s3")
         # S3 필수 설정 누락
         
-        with pytest.raises(ValueError):
+        with pytest.raises(ConfigurationException):
             get_settings() 

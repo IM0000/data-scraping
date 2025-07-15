@@ -578,13 +578,16 @@ CMD ["python", "-m", "src.worker.worker_main"]
 version: '3.8'
 
 services:
-  redis:
-    image: redis:7-alpine
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
     ports:
-      - '6379:6379'
+      - '5672:5672'
+      - '15672:15672'
     volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
 
   api:
     build:
@@ -593,10 +596,10 @@ services:
     ports:
       - '8000:8000'
     depends_on:
-      - redis
+      - rabbitmq
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672/
+      - RABBITMQ_TASK_QUEUE=scraping_tasks
       - SCRIPT_REPOSITORY_TYPE=${SCRIPT_REPOSITORY_TYPE:-git}
       - SCRIPT_REPOSITORY_URL=${SCRIPT_REPOSITORY_URL}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
@@ -613,10 +616,10 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.worker
     depends_on:
-      - redis
+      - rabbitmq
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672/
+      - RABBITMQ_TASK_QUEUE=scraping_tasks
       - SCRIPT_REPOSITORY_TYPE=${SCRIPT_REPOSITORY_TYPE:-git}
       - SCRIPT_REPOSITORY_URL=${SCRIPT_REPOSITORY_URL}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
@@ -655,7 +658,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
 
 volumes:
-  redis_data:
+  rabbitmq_data:
   script_cache:
   prometheus_data:
   grafana_data:

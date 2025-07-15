@@ -18,24 +18,6 @@ from ..models.enums import ScriptRepositoryType
 class Settings(BaseSettings):
     """시스템 설정 관리 클래스"""
     
-    # Redis 설정
-    redis_host: str = Field(
-        default="localhost",
-        description="Redis 호스트 주소"
-    )
-    redis_port: int = Field(
-        default=6379,
-        description="Redis 포트 번호"
-    )
-    redis_db: int = Field(
-        default=0,
-        description="Redis 데이터베이스 번호"
-    )
-    redis_password: Optional[str] = Field(
-        default=None,
-        description="Redis 비밀번호"
-    )
-    
     # RabbitMQ 설정
     rabbitmq_url: str = Field(
         default="amqp://localhost:5672/",
