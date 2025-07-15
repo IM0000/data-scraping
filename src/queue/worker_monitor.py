@@ -5,12 +5,13 @@ RabbitMQ를 통한 워커 상태 추적 및 하트비트 관리를 담당합니�
 """
 
 import json
+from collections.abc import Awaitable
 from datetime import datetime
 from typing import Any, Callable, Optional
 
 import aio_pika
 from aio_pika import Message, connect_robust
-from aio_pika.abc import AbstractChannel, AbstractConnection
+from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
 
 from ..config.settings import Settings
 from ..exceptions import QueueConnectionException
@@ -30,6 +31,7 @@ class WorkerMonitor:
         self.settings = settings
         self.connection: Optional[AbstractConnection] = None
         self.channel: Optional[AbstractChannel] = None
+        self.worker_status_exchange_obj: Optional[AbstractExchange] = None
         self.logger = setup_logging(settings)
         self.heartbeat_timeout = 60  # 1분
 
@@ -47,8 +49,8 @@ class WorkerMonitor:
             )
             self.channel = await self.connection.channel()
 
-            # Exchange 선언
-            await self.channel.declare_exchange(
+            # Exchange 선언 및 객체 저장
+            self.worker_status_exchange_obj = await self.channel.declare_exchange(
                 self.worker_status_exchange,
                 aio_pika.ExchangeType.TOPIC,
                 durable=True
@@ -69,11 +71,11 @@ class WorkerMonitor:
             self.logger.info(f"워커 모니터 RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
         except Exception as e:
             self.logger.error(f"워커 모니터 RabbitMQ 연결 실패: {e}")
-            raise QueueConnectionException(f"워커 모니터 RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"워커 모니터 RabbitMQ 연결 실패: {e}") from e
 
     async def publish_worker_status(self, worker_id: str, status: str, metadata: Optional[dict] = None) -> None:
         """워커 상태 발행"""
-        if not self.channel:
+        if not self.worker_status_exchange_obj:
             return
 
         worker_data = {
@@ -90,9 +92,9 @@ class WorkerMonitor:
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
 
-        await self.channel.default_exchange.publish(
+        await self.worker_status_exchange_obj.publish(
             message,
-            routing_key=f"{self.worker_status_exchange}.{routing_key}"
+            routing_key=routing_key
         )
 
         self.logger.info(f"워커 상태 발행: {worker_id} -> {status}")
@@ -167,7 +169,7 @@ class WorkerMonitor:
 
         self.logger.debug(f"하트비트 전송: {worker_id}")
 
-    async def start_heartbeat_consumer(self, heartbeat_handler: Callable) -> None:
+    async def start_heartbeat_consumer(self, heartbeat_handler: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
         """하트비트 소비자 시작"""
         if not self.channel:
             return
@@ -177,7 +179,7 @@ class WorkerMonitor:
             durable=True
         )
 
-        async def process_heartbeat(message):
+        async def process_heartbeat(message: Any) -> None:
             async with message.process():
                 try:
                     heartbeat_data = json.loads(message.body.decode())
@@ -188,7 +190,7 @@ class WorkerMonitor:
         await queue.consume(process_heartbeat)
         self.logger.info("하트비트 소비자 시작됨")
 
-    async def start_worker_registry_consumer(self, registry_handler: Callable) -> None:
+    async def start_worker_registry_consumer(self, registry_handler: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
         """워커 등록 소비자 시작"""
         if not self.channel:
             return
@@ -198,7 +200,7 @@ class WorkerMonitor:
             durable=True
         )
 
-        async def process_registry(message):
+        async def process_registry(message: Any) -> None:
             async with message.process():
                 try:
                     registry_data = json.loads(message.body.decode())
@@ -209,7 +211,7 @@ class WorkerMonitor:
         await queue.consume(process_registry)
         self.logger.info("워커 등록 소비자 시작됨")
 
-    async def start_worker_status_consumer(self, status_handler: Callable) -> None:
+    async def start_worker_status_consumer(self, status_handler: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
         """워커 상태 소비자 시작"""
         if not self.channel:
             return
@@ -226,7 +228,7 @@ class WorkerMonitor:
             routing_key="worker.*"
         )
 
-        async def process_status(message):
+        async def process_status(message: Any) -> None:
             async with message.process():
                 try:
                     status_data = json.loads(message.body.decode())

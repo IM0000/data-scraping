@@ -5,6 +5,7 @@ RabbitMQ RPC, TaskManager, WorkerMonitor 클래스들의 단위 테스트를 제
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import json
 from unittest.mock import AsyncMock, Mock, patch
@@ -31,7 +32,7 @@ class TestRabbitMQRPC:
             log_level="DEBUG"
         )
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def rabbitmq_rpc(self, settings):
         """RabbitMQ RPC 픽스처"""
         rpc = RabbitMQRPC(settings)
@@ -171,7 +172,7 @@ class TestRabbitMQWorker:
             rabbitmq_task_queue="test_scraping_tasks"
         )
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def mock_task_handler(self):
         """모의 작업 처리 함수 픽스처"""
         async def handler(request: ScrapingRequest) -> ScrapingResponse:
@@ -182,7 +183,7 @@ class TestRabbitMQWorker:
             )
         return handler
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def rabbitmq_worker(self, settings, mock_task_handler):
         """RabbitMQ 워커 픽스처"""
         worker = RabbitMQWorker(settings, mock_task_handler)
@@ -249,18 +250,14 @@ class TestRabbitMQWorker:
 
     @pytest.mark.asyncio
     async def test_send_response(self, rabbitmq_worker):
-        """응답 메시지 발송 테스트"""
+        """응답 발송 테스트"""
         response = ScrapingResponse(
             request_id="test-123",
             status=TaskStatus.COMPLETED,
             data={"result": "success"}
         )
 
-        await rabbitmq_worker._send_response(
-            response, 
-            "test-reply-queue", 
-            "test-correlation-id"
-        )
+        await rabbitmq_worker._send_response(response, "test-reply-queue", "test-correlation-id")
 
         rabbitmq_worker.channel.default_exchange.publish.assert_called_once()
 
@@ -272,10 +269,11 @@ class TestTaskManager:
     def settings(self):
         """테스트용 설정 픽스처"""
         return Settings(
-            rabbitmq_url="amqp://test:test@localhost:5672/"
+            rabbitmq_url="amqp://test:test@localhost:5672/",
+            rabbitmq_task_queue="test_scraping_tasks"
         )
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def task_manager(self, settings):
         """작업 매니저 픽스처"""
         manager = TaskManager(settings)
@@ -283,6 +281,8 @@ class TestTaskManager:
         # Mock RabbitMQ components
         manager.connection = AsyncMock()
         manager.channel = AsyncMock()
+        manager.task_history_exchange_obj = AsyncMock()
+        manager.worker_status_exchange_obj = AsyncMock()
         return manager
 
     @pytest.mark.asyncio
@@ -293,13 +293,19 @@ class TestTaskManager:
         with patch('aio_pika.connect_robust', new_callable=AsyncMock) as mock_connect:
             mock_connection = AsyncMock()
             mock_channel = AsyncMock()
+            mock_task_exchange = AsyncMock()
+            mock_worker_exchange = AsyncMock()
+            
             mock_connect.return_value = mock_connection
             mock_connection.channel.return_value = mock_channel
+            mock_channel.declare_exchange.side_effect = [mock_task_exchange, mock_worker_exchange]
 
             await manager.connect()
 
             assert manager.connection == mock_connection
             assert manager.channel == mock_channel
+            assert manager.task_history_exchange_obj == mock_task_exchange
+            assert manager.worker_status_exchange_obj == mock_worker_exchange
             # Exchange 선언 확인
             assert mock_channel.declare_exchange.call_count == 2
 
@@ -314,8 +320,12 @@ class TestTaskManager:
 
         await task_manager.publish_task_completion(response)
 
-        # RabbitMQ 메시지 발행 확인
-        task_manager.channel.default_exchange.publish.assert_called_once()
+        # Exchange에 메시지 발행 확인
+        task_manager.task_history_exchange_obj.publish.assert_called_once()
+        
+        # 호출 인자 확인
+        call_args = task_manager.task_history_exchange_obj.publish.call_args
+        assert call_args[1]["routing_key"] == "task.completed"
 
     @pytest.mark.asyncio
     async def test_publish_task_completion_failed(self, task_manager):
@@ -328,8 +338,45 @@ class TestTaskManager:
 
         await task_manager.publish_task_completion(response)
 
-        # RabbitMQ 메시지 발행 확인
-        task_manager.channel.default_exchange.publish.assert_called_once()
+        # Exchange에 메시지 발행 확인
+        task_manager.task_history_exchange_obj.publish.assert_called_once()
+        
+        # 호출 인자 확인
+        call_args = task_manager.task_history_exchange_obj.publish.call_args
+        assert call_args[1]["routing_key"] == "task.failed"
+
+    @pytest.mark.asyncio
+    async def test_publish_task_started(self, task_manager):
+        """작업 시작 이벤트 발행 테스트"""
+        request = ScrapingRequest(
+            script_name="test_scraper",
+            script_version="1.0.0",
+            parameters={"url": "https://example.com"}
+        )
+
+        await task_manager.publish_task_started(request)
+
+        # Exchange에 메시지 발행 확인
+        task_manager.task_history_exchange_obj.publish.assert_called_once()
+        
+        # 호출 인자 확인
+        call_args = task_manager.task_history_exchange_obj.publish.call_args
+        assert call_args[1]["routing_key"] == "task.started"
+
+    @pytest.mark.asyncio
+    async def test_publish_task_progress(self, task_manager):
+        """작업 진행 이벤트 발행 테스트"""
+        await task_manager.publish_task_progress(
+            "test-123", 
+            {"completed": 50, "total": 100}
+        )
+
+        # Exchange에 메시지 발행 확인
+        task_manager.task_history_exchange_obj.publish.assert_called_once()
+        
+        # 호출 인자 확인
+        call_args = task_manager.task_history_exchange_obj.publish.call_args
+        assert call_args[1]["routing_key"] == "task.progress"
 
     @pytest.mark.asyncio
     async def test_get_queue_metrics(self, task_manager):
@@ -353,7 +400,7 @@ class TestWorkerMonitor:
             rabbitmq_url="amqp://test:test@localhost:5672/"
         )
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def worker_monitor(self, settings):
         """워커 모니터 픽스처"""
         monitor = WorkerMonitor(settings)
@@ -361,7 +408,28 @@ class TestWorkerMonitor:
         # Mock RabbitMQ components
         monitor.connection = AsyncMock()
         monitor.channel = AsyncMock()
+        monitor.worker_status_exchange_obj = AsyncMock()
         return monitor
+
+    @pytest.mark.asyncio
+    async def test_connect_success(self, settings):
+        """워커 모니터 연결 성공 테스트"""
+        monitor = WorkerMonitor(settings)
+
+        with patch('aio_pika.connect_robust', new_callable=AsyncMock) as mock_connect:
+            mock_connection = AsyncMock()
+            mock_channel = AsyncMock()
+            mock_exchange = AsyncMock()
+            
+            mock_connect.return_value = mock_connection
+            mock_connection.channel.return_value = mock_channel
+            mock_channel.declare_exchange.return_value = mock_exchange
+
+            await monitor.connect()
+
+            assert monitor.connection == mock_connection
+            assert monitor.channel == mock_channel
+            assert monitor.worker_status_exchange_obj == mock_exchange
 
     @pytest.mark.asyncio
     async def test_publish_worker_status(self, worker_monitor):
@@ -372,8 +440,12 @@ class TestWorkerMonitor:
             {"current_tasks": 2}
         )
 
-        # RabbitMQ 메시지 발행 확인
-        worker_monitor.channel.default_exchange.publish.assert_called_once()
+        # Exchange에 메시지 발행 확인
+        worker_monitor.worker_status_exchange_obj.publish.assert_called_once()
+        
+        # 호출 인자 확인
+        call_args = worker_monitor.worker_status_exchange_obj.publish.call_args
+        assert call_args[1]["routing_key"] == "worker.active"
 
     @pytest.mark.asyncio
     async def test_send_heartbeat(self, worker_monitor):
@@ -383,7 +455,7 @@ class TestWorkerMonitor:
             {"cpu_usage": 45.2}
         )
 
-        # RabbitMQ 메시지 발행 확인
+        # 기본 Exchange에 메시지 발행 확인 (하트비트는 큐로 직접 전송)
         worker_monitor.channel.default_exchange.publish.assert_called_once()
 
     @pytest.mark.asyncio
@@ -396,7 +468,7 @@ class TestWorkerMonitor:
 
         await worker_monitor.register_worker("test-worker-1", worker_info)
 
-        # RabbitMQ 메시지 발행 확인
+        # 기본 Exchange에 메시지 발행 확인 (등록은 큐로 직접 전송)
         worker_monitor.channel.default_exchange.publish.assert_called_once()
 
     @pytest.mark.asyncio

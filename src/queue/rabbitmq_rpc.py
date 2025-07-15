@@ -9,7 +9,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime
-from typing import Callable, Optional, Any
+from typing import Callable, Optional
 
 from aio_pika import DeliveryMode, Message, connect_robust
 from aio_pika.abc import (
@@ -39,12 +39,12 @@ class RabbitMQRPC:
         self.connection: Optional[AbstractConnection] = None
         self.channel: Optional[AbstractChannel] = None
         self.callback_queue: Optional[AbstractQueue] = None
-        self.futures: dict[str, asyncio.Future[Any]] = {}
+        self.futures: dict[str, asyncio.Future[ScrapingResponse]] = {}
         self.logger = setup_logging(settings)
 
         # 큐 이름 정의
         self.task_queue_name = settings.rabbitmq_task_queue
-        self.reply_queue_name = None  # 동적 생성
+        self.reply_queue_name: Optional[str] = None  # 동적 생성
 
     async def connect(self) -> None:
         """RabbitMQ 연결 초기화"""
@@ -65,7 +65,7 @@ class RabbitMQRPC:
             self.logger.info(f"RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
         except Exception as e:
             self.logger.error(f"RabbitMQ 연결 실패: {e}")
-            raise QueueConnectionException(f"RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"RabbitMQ 연결 실패: {e}") from e
 
     async def setup_callback_queue(self) -> None:
         """응답 수신용 콜백 큐 설정"""
@@ -109,7 +109,7 @@ class RabbitMQRPC:
             raise QueueConnectionException("RabbitMQ가 초기화되지 않았습니다")
 
         correlation_id = str(uuid.uuid4())
-        future = asyncio.Future()
+        future: asyncio.Future[ScrapingResponse] = asyncio.Future()
         self.futures[correlation_id] = future
 
         # 요청 메시지 생성
@@ -139,13 +139,13 @@ class RabbitMQRPC:
 
         try:
             # 응답 대기 (타임아웃 포함)
-            response = await asyncio.wait_for(future, timeout=timeout)
+            response: ScrapingResponse = await asyncio.wait_for(future, timeout=timeout)
             return response
         except asyncio.TimeoutError:
             # 타임아웃 시 future 정리
             self.futures.pop(correlation_id, None)
             self.logger.error(f"RPC 요청 타임아웃: {correlation_id}")
-            raise TimeoutError(f"RPC 요청 타임아웃: {correlation_id}")
+            raise TimeoutError(f"RPC 요청 타임아웃: {correlation_id}") from None
         except Exception as e:
             self.futures.pop(correlation_id, None)
             self.logger.error(f"RPC 요청 오류: {correlation_id}, {e}")
@@ -188,7 +188,7 @@ class RabbitMQWorker:
             self.logger.info(f"워커 RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
         except Exception as e:
             self.logger.error(f"워커 RabbitMQ 연결 실패: {e}")
-            raise QueueConnectionException(f"워커 RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"워커 RabbitMQ 연결 실패: {e}") from e
 
     async def start_consuming(self) -> None:
         """작업 큐 소비 시작"""

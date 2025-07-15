@@ -5,12 +5,13 @@ RabbitMQ를 통한 작업 상태 추적 및 이벤트 발행을 담당합니다.
 """
 
 import json
+from collections.abc import Awaitable
 from datetime import datetime
 from typing import Any, Callable, Optional
 
 import aio_pika
 from aio_pika import Message, connect_robust
-from aio_pika.abc import AbstractChannel, AbstractConnection
+from aio_pika.abc import AbstractChannel, AbstractConnection, AbstractExchange
 
 from ..config.settings import Settings
 from ..exceptions import QueueConnectionException
@@ -31,6 +32,8 @@ class TaskManager:
         self.settings = settings
         self.connection: Optional[AbstractConnection] = None
         self.channel: Optional[AbstractChannel] = None
+        self.task_history_exchange_obj: Optional[AbstractExchange] = None
+        self.worker_status_exchange_obj: Optional[AbstractExchange] = None
         self.logger = setup_logging(settings)
 
         # Exchange 이름 정의
@@ -46,13 +49,13 @@ class TaskManager:
             )
             self.channel = await self.connection.channel()
 
-            # Exchange 선언
-            await self.channel.declare_exchange(
+            # Exchange 선언 및 객체 저장
+            self.task_history_exchange_obj = await self.channel.declare_exchange(
                 self.task_history_exchange,
                 aio_pika.ExchangeType.TOPIC,
                 durable=True
             )
-            await self.channel.declare_exchange(
+            self.worker_status_exchange_obj = await self.channel.declare_exchange(
                 self.worker_status_exchange,
                 aio_pika.ExchangeType.TOPIC,
                 durable=True
@@ -61,11 +64,11 @@ class TaskManager:
             self.logger.info(f"작업 매니저 RabbitMQ 연결 성공: {self.settings.rabbitmq_url}")
         except Exception as e:
             self.logger.error(f"작업 매니저 RabbitMQ 연결 실패: {e}")
-            raise QueueConnectionException(f"작업 매니저 RabbitMQ 연결 실패: {e}")
+            raise QueueConnectionException(f"작업 매니저 RabbitMQ 연결 실패: {e}") from e
 
     async def publish_task_started(self, request: ScrapingRequest) -> None:
         """작업 시작 이벤트 발행"""
-        if not self.channel:
+        if not self.task_history_exchange_obj:
             return
 
         task_data = {
@@ -86,16 +89,16 @@ class TaskManager:
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
 
-        await self.channel.default_exchange.publish(
+        await self.task_history_exchange_obj.publish(
             message,
-            routing_key=f"{self.task_history_exchange}.{routing_key}"
+            routing_key=routing_key
         )
 
         self.logger.info(f"작업 시작 이벤트 발행: {request.request_id}")
 
     async def publish_task_completion(self, response: ScrapingResponse) -> None:
         """작업 완료 이벤트 발행"""
-        if not self.channel:
+        if not self.task_history_exchange_obj:
             return
 
         completion_data = {
@@ -115,9 +118,9 @@ class TaskManager:
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
         )
 
-        await self.channel.default_exchange.publish(
+        await self.task_history_exchange_obj.publish(
             message,
-            routing_key=f"{self.task_history_exchange}.{routing_key}"
+            routing_key=routing_key
         )
 
         if response.status == TaskStatus.COMPLETED:
@@ -127,7 +130,7 @@ class TaskManager:
 
     async def publish_task_progress(self, request_id: str, progress: dict[str, Any]) -> None:
         """작업 진행 상황 이벤트 발행"""
-        if not self.channel:
+        if not self.task_history_exchange_obj:
             return
 
         progress_data = {
@@ -143,9 +146,9 @@ class TaskManager:
             delivery_mode=aio_pika.DeliveryMode.NOT_PERSISTENT  # 진행 상황은 영속성 불필요
         )
 
-        await self.channel.default_exchange.publish(
+        await self.task_history_exchange_obj.publish(
             message,
-            routing_key=f"{self.task_history_exchange}.{routing_key}"
+            routing_key=routing_key
         )
 
         self.logger.debug(f"작업 진행 이벤트 발행: {request_id}")
@@ -168,7 +171,7 @@ class TaskManager:
             self.logger.error(f"큐 메트릭 조회 오류: {e}")
             return {}
 
-    async def setup_task_history_consumer(self, history_handler: Callable) -> None:
+    async def setup_task_history_consumer(self, history_handler: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
         """작업 히스토리 소비자 설정"""
         if not self.channel:
             return
@@ -185,7 +188,7 @@ class TaskManager:
             routing_key="task.*"
         )
 
-        async def process_history(message):
+        async def process_history(message: Any) -> None:
             async with message.process():
                 try:
                     history_data = json.loads(message.body.decode())
