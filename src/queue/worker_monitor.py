@@ -270,6 +270,19 @@ class WorkerMonitor:
 
         return unhealthy_workers
 
+    async def update_worker_status(self, worker_id: str, status_data: dict[str, Any]) -> None:
+        """워커 상태 업데이트"""
+        await self.publish_worker_status(worker_id, "status_update", status_data)
+
+    async def cleanup_inactive_workers(self) -> None:
+        """비활성 워커 정리"""
+        try:
+            # 실제 구현에서는 하트비트 기록을 확인하여 비활성 워커를 정리
+            # 여기서는 기본적인 로그만 남김
+            self.logger.debug("비활성 워커 정리 작업 실행")
+        except Exception as e:
+            self.logger.error(f"비활성 워커 정리 오류: {e}")
+
     async def disconnect(self) -> None:
         """연결 해제"""
         if self.connection and not self.connection.is_closed:

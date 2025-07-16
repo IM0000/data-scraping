@@ -81,6 +81,32 @@ class Settings(BaseSettings):
         default=1,
         description="워커당 최대 동시 작업 수"
     )
+    worker_heartbeat_interval: int = Field(
+        default=30,
+        description="워커 하트비트 간격 (초)"
+    )
+    worker_cleanup_interval: int = Field(
+        default=86400,
+        description="워커 정리 작업 간격 (초)"
+    )
+    
+    # 프로세스 리소스 제한 설정
+    process_memory_limit: str = Field(
+        default="512MB",
+        description="프로세스별 메모리 제한"
+    )
+    process_cpu_limit: int = Field(
+        default=300,
+        description="프로세스별 CPU 시간 제한 (초)"
+    )
+    process_file_limit: int = Field(
+        default=1024,
+        description="프로세스별 파일 디스크립터 제한"
+    )
+    process_timeout: int = Field(
+        default=300,
+        description="프로세스 실행 타임아웃 (초)"
+    )
     
     # 로깅 설정
     log_level: str = Field(
