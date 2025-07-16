@@ -154,10 +154,10 @@ from typing import Optional
 
 class Settings(BaseSettings):
     """시스템 설정 관리 클래스"""
-    # Redis 설정
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-    redis_db: int = 0
+    # RabbitMQ 설정
+    rabbitmq_url: str = "amqp://localhost:5672/"
+    rabbitmq_task_queue: str = "scraping_tasks"
+    rabbitmq_result_timeout: int = 300
 
     # 스크립트 저장소 설정
     script_repository_type: str = "git"  # git, http, s3
@@ -282,10 +282,10 @@ src/
 ### Environment Variables (.env)
 
 ```
-# Redis Configuration
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_DB=0
+# RabbitMQ Configuration
+RABBITMQ_URL=amqp://localhost:5672/
+RABBITMQ_TASK_QUEUE=scraping_tasks
+RABBITMQ_RESULT_TIMEOUT=300
 
 # Script Repository Configuration
 SCRIPT_REPOSITORY_TYPE=git  # git, http, s3
@@ -381,8 +381,8 @@ def test_settings_from_env():
     from src.config.settings import Settings
 
     settings = Settings()
-    assert settings.redis_host == "localhost"
-    assert settings.redis_port == 6379
+    assert settings.rabbitmq_url == "amqp://localhost:5672/"
+    assert settings.rabbitmq_task_queue == "scraping_tasks"
     assert settings.worker_timeout == 300
 ```
 

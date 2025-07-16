@@ -95,7 +95,7 @@ src/
 │   └── helpers.py           # Common utilities
 ├── exceptions.py            # Exception classes
 ├── queue/                   # Message queue system
-│   ├── redis_queue.py
+│   ├── rabbitmq_rpc.py
 │   ├── task_manager.py
 │   └── worker_monitor.py
 ├── scripts/                 # Script management
@@ -341,7 +341,7 @@ from contextlib import asynccontextmanager
 import asyncio
 from datetime import datetime
 from src.config.settings import Settings
-from src.queue.redis_queue import RedisQueue
+from src.queue.rabbitmq_rpc import RabbitMQRPC
 from src.queue.task_manager import TaskManager
 from src.queue.worker_monitor import WorkerMonitor
 from src.models.base import ScrapingRequest
@@ -352,7 +352,7 @@ from src.utils.logging import setup_logging
 # 전역 변수
 settings = Settings()
 logger = setup_logging(settings)
-redis_queue = None
+rabbitmq_rpc = None
 task_manager = None
 worker_monitor = None
 app_start_time = datetime.now()
@@ -360,19 +360,23 @@ app_start_time = datetime.now()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """앱 생명주기 관리"""
-    global redis_queue, task_manager, worker_monitor
+    global rabbitmq_rpc, task_manager, worker_monitor
 
     # 시작 시 초기화
     logger.info("API 서버 시작")
 
     try:
-        # Redis 큐 연결
-        redis_queue = RedisQueue(settings)
-        await redis_queue.connect()
+        # RabbitMQ RPC 연결
+        rabbitmq_rpc = RabbitMQRPC(settings)
+        await rabbitmq_rpc.connect()
+        await rabbitmq_rpc.setup_callback_queue()
 
         # 컴포넌트 초기화
-        task_manager = TaskManager(redis_queue)
-        worker_monitor = WorkerMonitor(redis_queue)
+        task_manager = TaskManager(settings)
+        await task_manager.connect()
+
+        worker_monitor = WorkerMonitor(settings)
+        await worker_monitor.connect()
 
         logger.info("API 서버 초기화 완료")
 

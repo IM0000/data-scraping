@@ -139,11 +139,11 @@ class TestConfigurationException:
 
     def test_configuration_exception(self):
         """설정 예외 테스트"""
-        exc = ConfigurationException("redis_host", "잘못된 호스트 형식")
+        exc = ConfigurationException("rabbitmq_url", "잘못된 RabbitMQ URL 형식")
         
-        assert "설정 오류: redis_host - 잘못된 호스트 형식" in str(exc)
-        assert exc.config_key == "redis_host"
-        assert exc.error_detail == "잘못된 호스트 형식"
+        assert "설정 오류: rabbitmq_url - 잘못된 RabbitMQ URL 형식" in str(exc)
+        assert exc.config_key == "rabbitmq_url"
+        assert exc.error_detail == "잘못된 RabbitMQ URL 형식"
         assert exc.error_code == "CONFIGURATION_ERROR"
 
 

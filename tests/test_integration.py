@@ -90,17 +90,16 @@ class TestConfigurationIntegration:
         
         # 환경 변수 설정
         monkeypatch.setenv("LOG_LEVEL", "DEBUG")
-        monkeypatch.setenv("REDIS_HOST", "test.redis.com")
-        monkeypatch.setenv("REDIS_PORT", "6380")
+        monkeypatch.setenv("RABBITMQ_URL", "amqp://test:pass@test.rabbitmq.com:5672/")
         
         with tempfile.TemporaryDirectory() as temp_dir:
             monkeypatch.setenv("SCRIPT_CACHE_DIR", temp_dir)
+            monkeypatch.setenv("SCRIPT_REPOSITORY_URL", "https://github.com/test/repo")
             
             # 설정 로드
             settings = Settings()
             assert settings.log_level == "DEBUG"
-            assert settings.redis_host == "test.redis.com"
-            assert settings.redis_port == 6380
+            assert settings.rabbitmq_url == "amqp://test:pass@test.rabbitmq.com:5672/"
             
             # 로깅 시스템 초기화
             logger = setup_logging(settings)
