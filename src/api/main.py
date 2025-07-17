@@ -35,6 +35,7 @@ from .models import (
 )
 from .auth import get_current_client, get_optional_current_client, get_auth_manager, AuthManager
 from .endpoints.websocket import websocket_router
+from .endpoints.metrics import metrics_router
 
 # 전역 변수
 rabbitmq_rpc: Optional[RabbitMQRPC] = None
@@ -149,6 +150,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     # WebSocket 라우터 추가
     app.include_router(websocket_router)
+    
+    # 메트릭 라우터 추가
+    app.include_router(metrics_router)
 
     return app
 

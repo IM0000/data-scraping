@@ -1,0 +1,38 @@
+# Worker Dockerfile
+FROM python:3.11-slim as base
+
+# 시스템 의존성 설치 (워커용 추가 도구 포함)
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    build-essential \
+    wget \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# uv 설치
+RUN pip install --no-cache-dir uv
+
+# 작업 디렉터리 설정
+WORKDIR /app
+
+# 의존성 파일 복사 (Docker 레이어 캐시 활용)
+COPY pyproject.toml uv.lock* ./
+
+# uv를 사용하여 프로젝트 의존성 설치
+RUN uv pip install --system --no-cache .
+
+# 애플리케이션 코드 복사
+COPY src/ src/
+COPY .env* ./
+
+# 캐시 및 로그 디렉터리 생성
+RUN mkdir -p /app/cache/scripts /app/logs
+
+# 비루트 사용자 생성
+RUN useradd --create-home --shell /bin/bash worker && \
+    chown -R worker:worker /app
+USER worker
+
+# 워커 실행
+CMD ["python", "-m", "src.worker.worker_main"] 
