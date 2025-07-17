@@ -1,0 +1,45 @@
+# 개발 환경 설정
+version: '3.8'
+
+services:
+  # API 개발 설정
+  api:
+    environment:
+      - LOG_LEVEL=DEBUG
+      - API_RELOAD=true
+    volumes:
+      - ../src:/app/src # 코드 핫 리로드를 위한 볼륨 마운트
+    ports:
+      - '8001:8000' # 개발용 포트
+
+  # 워커 개발 설정
+  worker:
+    environment:
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ../src:/app/src # 코드 핫 리로드를 위한 볼륨 마운트
+    deploy:
+      replicas: 1 # 개발 시 워커 1개만
+
+  # 개발용 추가 서비스들
+  mailhog:
+    image: mailhog/mailhog
+    container_name: scraping-mailhog
+    ports:
+      - '1025:1025' # SMTP
+      - '8025:8025' # Web UI
+    networks:
+      - scraping-network
+
+  # 개발용 Redis Commander
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: scraping-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - '8081:8081'
+    depends_on:
+      - redis
+    networks:
+      - scraping-network

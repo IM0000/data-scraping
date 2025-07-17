@@ -38,7 +38,7 @@ class Settings(BaseSettings):
         description="스크립트 저장소 타입"
     )
     script_repository_url: Optional[str] = Field(
-        default=None,
+        default="https://github.com/example/scraping-scripts",
         description="스크립트 저장소 URL (Git/HTTP용)"
     )
     script_cache_dir: str = Field(
@@ -134,6 +134,44 @@ class Settings(BaseSettings):
     api_timeout: int = Field(
         default=30,
         description="API 요청 타임아웃 (초)"
+    )
+    api_reload: bool = Field(
+        default=True,
+        description="API 서버 자동 재로드 (개발용)"
+    )
+    
+    # JWT 인증 설정
+    jwt_secret_key: str = Field(
+        default="your-secret-key-change-in-production",
+        description="JWT 서명용 비밀 키"
+    )
+    jwt_algorithm: str = Field(
+        default="HS256",
+        description="JWT 알고리즘"
+    )
+    jwt_expires_hours: int = Field(
+        default=24,
+        description="JWT 토큰 만료 시간 (시간)"
+    )
+    
+    # CORS 설정
+    cors_origins: list[str] = Field(
+        default=["http://localhost:3000", "http://localhost:8080"],
+        description="CORS 허용 오리진 목록"
+    )
+    cors_credentials: bool = Field(
+        default=True,
+        description="CORS 자격 증명 허용"
+    )
+    
+    # 레이트 리미팅 설정
+    rate_limit_requests: int = Field(
+        default=100,
+        description="레이트 리밋 요청 수"
+    )
+    rate_limit_window: int = Field(
+        default=60,
+        description="레이트 리밋 윈도우 (초)"
     )
     
     class Config:

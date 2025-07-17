@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  # RabbitMQ 메시지 브로커
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: scraping-rabbitmq
+    ports:
+      - '5672:5672' # AMQP 포트
+      - '15672:15672' # 관리 UI 포트
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+      - RABBITMQ_DEFAULT_VHOST=/
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', 'check_port_connectivity']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - scraping-network
+
+  # API 게이트웨이
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: scraping-api
+    ports:
+      - '8000:8000'
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672/
+      - RABBITMQ_TASK_QUEUE=scraping_tasks
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-here}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # 스크립트 저장소 설정
+      - SCRIPT_REPOSITORY_TYPE=${SCRIPT_REPOSITORY_TYPE:-git}
+      - SCRIPT_REPOSITORY_URL=${SCRIPT_REPOSITORY_URL}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - S3_REGION=${S3_REGION}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_PREFIX=${S3_PREFIX:-scripts/}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - scraping-network
+    labels:
+      - 'prometheus.scrape=true'
+      - 'prometheus.port=8000'
+      - 'prometheus.path=/metrics'
+
+  # 워커 (스케일링 가능)
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_URL=amqp://admin:admin123@rabbitmq:5672/
+      - RABBITMQ_TASK_QUEUE=scraping_tasks
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # 스크립트 저장소 설정
+      - SCRIPT_REPOSITORY_TYPE=${SCRIPT_REPOSITORY_TYPE:-git}
+      - SCRIPT_REPOSITORY_URL=${SCRIPT_REPOSITORY_URL}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - S3_REGION=${S3_REGION}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - S3_PREFIX=${S3_PREFIX:-scripts/}
+    volumes:
+      - ./logs:/app/logs
+      - script_cache:/app/cache
+    restart: unless-stopped
+    networks:
+      - scraping-network
+    deploy:
+      replicas: 3 # 3개 워커 인스턴스
+
+  # Prometheus 메트릭 수집
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: scraping-prometheus
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - scraping-network
+
+  # Grafana 대시보드
+  grafana:
+    image: grafana/grafana:latest
+    container_name: scraping-grafana
+    ports:
+      - '3000:3000'
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+    networks:
+      - scraping-network
+
+  # Redis (캐시용, 선택사항)
+  redis:
+    image: redis:7-alpine
+    container_name: scraping-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - scraping-network
+
+volumes:
+  rabbitmq_data:
+    driver: local
+  script_cache:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  scraping-network:
+    driver: bridge
