@@ -125,7 +125,7 @@ class AuthManager:
                 detail="토큰이 만료되었습니다",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        except jwt.JWTError as e:
+        except jwt.PyJWTError as e:
             self.logger.warning(f"JWT 검증 실패: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
