@@ -263,6 +263,27 @@ class RabbitMQWorker:
             routing_key=reply_to
         )
 
+    def is_connected(self) -> bool:
+        """연결 상태 확인"""
+        return (
+            self.connection is not None 
+            and not self.connection.is_closed 
+            and self.channel is not None 
+            and not self.channel.is_closed
+        )
+
+    async def reconnect(self) -> None:
+        """연결 재시도"""
+        try:
+            if self.connection and not self.connection.is_closed:
+                await self.connection.close()
+            
+            await self.connect()
+            self.logger.info("RabbitMQ 재연결 성공")
+        except Exception as e:
+            self.logger.error(f"RabbitMQ 재연결 실패: {e}")
+            raise
+
     async def disconnect(self) -> None:
         """연결 해제"""
         if self.connection and not self.connection.is_closed:

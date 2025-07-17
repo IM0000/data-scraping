@@ -139,4 +139,92 @@ class ScriptRepositoryException(ScrapingSystemException):
         message = f"스크립트 저장소 오류 ({repository_type}): {error_detail}"
         super().__init__(message, "SCRIPT_REPOSITORY_ERROR")
         self.repository_type = repository_type
-        self.error_detail = error_detail 
+        self.error_detail = error_detail
+
+
+class WorkerException(ScrapingSystemException):
+    """워커 시스템 관련 예외"""
+    
+    def __init__(self, message: str, worker_id: Optional[str] = None):
+        """
+        워커 예외 초기화
+        
+        Args:
+            message: 오류 메시지
+            worker_id: 워커 ID
+        """
+        super().__init__(message, "WORKER_ERROR")
+        self.worker_id = worker_id
+
+
+class ProcessExecutionException(WorkerException):
+    """프로세스 실행 관련 예외"""
+    
+    def __init__(self, message: str, process_id: Optional[str] = None, return_code: Optional[int] = None):
+        """
+        프로세스 실행 예외 초기화
+        
+        Args:
+            message: 오류 메시지
+            process_id: 프로세스 ID
+            return_code: 프로세스 종료 코드
+        """
+        super().__init__(message)
+        self.error_code = "PROCESS_EXECUTION_ERROR"
+        self.process_id = process_id
+        self.return_code = return_code
+
+
+class ResourceLimitException(ProcessExecutionException):
+    """리소스 제한 초과 예외"""
+    
+    def __init__(self, resource_type: str, limit_value: str, current_value: str):
+        """
+        리소스 제한 예외 초기화
+        
+        Args:
+            resource_type: 리소스 타입 (memory, cpu, files)
+            limit_value: 제한값
+            current_value: 현재값
+        """
+        message = f"리소스 제한 초과 ({resource_type}): 제한={limit_value}, 현재={current_value}"
+        super().__init__(message)
+        self.error_code = "RESOURCE_LIMIT_ERROR"
+        self.resource_type = resource_type
+        self.limit_value = limit_value
+        self.current_value = current_value
+
+
+class AuthenticationException(ScrapingSystemException):
+    """인증 관련 예외"""
+    
+    def __init__(self, message: str, client_id: Optional[str] = None):
+        """
+        인증 예외 초기화
+        
+        Args:
+            message: 오류 메시지
+            client_id: 클라이언트 ID
+        """
+        super().__init__(message, "AUTHENTICATION_ERROR")
+        self.client_id = client_id
+
+
+class ValidationException(ScrapingSystemException):
+    """유효성 검증 예외"""
+    
+    def __init__(self, field_name: str, error_detail: str):
+        """
+        검증 예외 초기화
+        
+        Args:
+            field_name: 필드 이름
+            error_detail: 오류 상세 정보
+        """
+        message = f"유효성 검증 실패: {field_name} - {error_detail}"
+        super().__init__(message, "VALIDATION_ERROR")
+        self.field_name = field_name
+        self.error_detail = error_detail
+
+
+ 
