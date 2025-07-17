@@ -195,4 +195,36 @@ class ResourceLimitException(ProcessExecutionException):
         self.current_value = current_value
 
 
+class AuthenticationException(ScrapingSystemException):
+    """인증 관련 예외"""
+    
+    def __init__(self, message: str, client_id: Optional[str] = None):
+        """
+        인증 예외 초기화
+        
+        Args:
+            message: 오류 메시지
+            client_id: 클라이언트 ID
+        """
+        super().__init__(message, "AUTHENTICATION_ERROR")
+        self.client_id = client_id
+
+
+class ValidationException(ScrapingSystemException):
+    """유효성 검증 예외"""
+    
+    def __init__(self, field_name: str, error_detail: str):
+        """
+        검증 예외 초기화
+        
+        Args:
+            field_name: 필드 이름
+            error_detail: 오류 상세 정보
+        """
+        message = f"유효성 검증 실패: {field_name} - {error_detail}"
+        super().__init__(message, "VALIDATION_ERROR")
+        self.field_name = field_name
+        self.error_detail = error_detail
+
+
  
