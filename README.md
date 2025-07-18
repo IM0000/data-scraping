@@ -1,7 +1,3 @@
-네, 프로젝트의 폴더 구조와 규칙, 그리고 README.md의 예시를 참고하여 이 data-scraping-project의 소개용 README.md 초안을 아래와 같이 제안드립니다.
-
----
-
 # Data Scraping Project
 
 ## 프로젝트 소개
